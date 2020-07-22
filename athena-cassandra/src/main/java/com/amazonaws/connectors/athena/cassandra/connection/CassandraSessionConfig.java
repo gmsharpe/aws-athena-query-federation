@@ -8,4 +8,7 @@ public class CassandraSessionConfig {
     public static CassandraSessionConfig getDefaultSessionConfig() {
         return DEFAULT_SESSION_CONFIG;
     }
+
+
+
 }

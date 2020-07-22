@@ -16,6 +16,12 @@
 
     <artifactId>athena-cassandra</artifactId>
     <dependencies>
+        <!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-annotations -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>2.11.0</version>
+        </dependency>
         <!-- using because NoSuchMethodError thrown without -->
         <dependency>
             <groupId>io.netty</groupId>
@@ -26,9 +32,17 @@
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-athena-federation-sdk</artifactId>
-            <version>2020.20.1</version>
-            <scope>compile</scope>
+            <version>${aws-athena-federation-sdk.version}</version>
+            <exclusions>
+                <!-- replaced with jcl-over-slf4j -->
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
+
+
         <dependency>
             <groupId>com.datastax.oss</groupId>
             <artifactId>java-driver-core</artifactId>
