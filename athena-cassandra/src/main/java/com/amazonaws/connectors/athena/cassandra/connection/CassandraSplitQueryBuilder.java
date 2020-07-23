@@ -30,6 +30,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * todo deconstruct and refactor (from JdbcSplitQueryBuilder and subclasses - PostGreSqlQueryStringBuilder, etc.)
+ *
+ * note: still deconstructing what this would do, using the JDBC connector example.  because of similarities with cql and sql, it's likely
+ * some of the functionality from the JDBC Split Query Builder may prove useful
+ */
+
 public class CassandraSplitQueryBuilder {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CassandraSplitQueryBuilder.class);
@@ -96,63 +103,13 @@ public class CassandraSplitQueryBuilder {
         LOGGER.info("Generated SQL : {}", sql.toString());
         PreparedStatement statement = cqlSession.prepare(sql.toString());
 
-   /*     // TODO all types, converts Arrow values to JDBC.
-        for (int i = 0; i < accumulator.size(); i++) {
-            TypeAndValue typeAndValue = accumulator.get(i);
-
-            Types.MinorType minorTypeForArrowType = Types.getMinorTypeForArrowType(typeAndValue.getType());
-
-            switch (minorTypeForArrowType) {
-                case BIGINT:
-                    statement.setLong(i + 1, (long) typeAndValue.getValue());
-                    break;
-                case INT:
-                    statement.setInt(i + 1, ((Number) typeAndValue.getValue()).intValue());
-                    break;
-                case SMALLINT:
-                    statement.setShort(i + 1, ((Number) typeAndValue.getValue()).shortValue());
-                    break;
-                case TINYINT:
-                    statement.setByte(i + 1, ((Number) typeAndValue.getValue()).byteValue());
-                    break;
-                case FLOAT8:
-                    statement.setDouble(i + 1, (double) typeAndValue.getValue());
-                    break;
-                case FLOAT4:
-                    statement.setFloat(i + 1, (float) typeAndValue.getValue());
-                    break;
-                case BIT:
-                    statement.setBoolean(i + 1, (boolean) typeAndValue.getValue());
-                    break;
-                case DATEDAY:
-                    LocalDateTime dateTime = ((LocalDateTime) typeAndValue.getValue());
-                    statement.setDate(i + 1, new Date(dateTime.toDateTime(DateTimeZone.UTC).getMillis()));
-                    break;
-                case DATEMILLI:
-                    LocalDateTime timestamp = ((LocalDateTime) typeAndValue.getValue());
-                    statement.setTimestamp(i + 1, new Timestamp(timestamp.toDateTime(DateTimeZone.UTC).getMillis()));
-                    break;
-                case VARCHAR:
-                    statement.setString(i + 1, String.valueOf(typeAndValue.getValue()));
-                    break;
-                case VARBINARY:
-                    statement.setBytes(i + 1, (byte[]) typeAndValue.getValue());
-                    break;
-                case DECIMAL:
-                    ArrowType.Decimal decimalType = (ArrowType.Decimal) typeAndValue.getType();
-                    statement.setBigDecimal(i + 1, BigDecimal.valueOf((long) typeAndValue.getValue(), decimalType.getScale()));
-                    break;
-                default:
-                    throw new UnsupportedOperationException(String.format("Can't handle type: %s, %s", typeAndValue.getType(), minorTypeForArrowType));
-            }
-        }*/
 
         return statement;
     }
 
 
 
-    // from PostgresqlSplitqueryBuilder
+    // todo deconstruct and refactor (from JdbcSplitQueryBuilder)
     protected String getFromClauseWithSplit(String catalog, String schema, String table, Split split)
     {
         StringBuilder tableName = new StringBuilder();
@@ -163,30 +120,18 @@ public class CassandraSplitQueryBuilder {
             tableName.append(quote(schema)).append('.');
         }
         tableName.append(quote(table));
-/*
-        String partitionSchemaName = split.getProperty(CassandraMetadataHandler.BLOCK_PARTITION_SCHEMA_COLUMN_NAME);
-        String partitionName = split.getProperty(CassandraMetadataHandler.BLOCK_PARTITION_COLUMN_NAME);
 
-        if (CassandraMetadataHandler.ALL_PARTITIONS.equals(partitionSchemaName) || CassandraMetadataHandler.ALL_PARTITIONS.equals(partitionName)) {
-            // No partitions
-            return String.format(" FROM %s ", tableName);
-        }*/
-
-       // return String.format(" FROM %s.%s ", quote(partitionSchemaName), quote(partitionName));
         return null;
     }
 
-    // from PostgresqlSplitqueryBuilder
+    // see PostgresqlSplitqueryBuilder
     protected List<String> getPartitionWhereClauses(final Split split)
     {
-       /* if (split.getProperty(CassandraMetadataHandler.BLOCK_PARTITION_SCHEMA_COLUMN_NAME).equals("*")
-                && !split.getProperty(CassandraMetadataHandler.BLOCK_PARTITION_COLUMN_NAME).equals("*")) {
-            return Collections.singletonList(split.getProperty(CassandraMetadataHandler.BLOCK_PARTITION_COLUMN_NAME));
-        }
-*/
+
         return Collections.emptyList();
     }
 
+    // todo deconstruct and refactor (from JdbcSplitQueryBuilder)
     private List<String> toConjuncts(List<Field> columns, Constraints constraints, List<TypeAndValue> accumulator, Map<String, String> partitionSplit)
     {
         List<String> conjuncts = new ArrayList<>();
@@ -205,6 +150,7 @@ public class CassandraSplitQueryBuilder {
         return conjuncts;
     }
 
+    // todo deconstruct and refactor (from JdbcSplitQueryBuilder)
     private String toPredicate(String columnName, ValueSet valueSet, ArrowType type, List<TypeAndValue> accumulator)
     {
         List<String> disjuncts = new ArrayList<>();
@@ -282,6 +228,7 @@ public class CassandraSplitQueryBuilder {
         return "(" + Joiner.on(" OR ").join(disjuncts) + ")";
     }
 
+    // todo deconstruct and refactor (from JdbcSplitQueryBuilder)
     private String toPredicate(String columnName, String operator, Object value, ArrowType type,
                                List<TypeAndValue> accumulator)
     {

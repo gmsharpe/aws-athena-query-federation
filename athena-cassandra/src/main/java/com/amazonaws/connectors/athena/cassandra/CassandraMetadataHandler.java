@@ -113,23 +113,6 @@ public class CassandraMetadataHandler extends MetadataHandler {
         LOGGER.info("doGetTable: enter", request.getTableName());
         Schema origSchema = null;
 
-/*        if (origSchema == null) {
-            origSchema = HbaseSchemaUtils.inferSchema(getOrCreateConn(request), request.getTableName(), NUM_ROWS_TO_SCAN);
-        }
-
-        SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder();
-        origSchema.getFields().forEach((Field field) ->
-                schemaBuilder.addField(field.getName(), field.getType(), field.getChildren())
-        );
-
-        origSchema.getCustomMetadata().entrySet().forEach((Map.Entry<String, String> meta) ->
-                schemaBuilder.addMetadata(meta.getKey(), meta.getValue()));
-
-        schemaBuilder.addField(HbaseSchemaUtils.ROW_COLUMN_NAME, Types.MinorType.VARCHAR.getType());*/
-
-       /* Schema schema = schemaBuilder.build();
-        LOGGER.info("doGetTable: return {}", schema);
-        return new GetTableResponse(request.getCatalogName(), request.getTableName(), schema);*/
 
         return null;
     }
@@ -181,8 +164,7 @@ public class CassandraMetadataHandler extends MetadataHandler {
             LOGGER.info("Using Secrets Manager.");
             return new RdsSecretsCredentialProvider(getSecret(secretName));
         }
-
-        return null;*/
+        */
         return new StaticCassandraCredentialProvider();
     }
 

@@ -54,7 +54,7 @@ public class CassandraToArrowTypeConverter {
 
     public static ArrowType toArrowType(String type, int position, String clustering_order) {
 
-
+        return null;
 
     }
 
