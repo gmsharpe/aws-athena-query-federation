@@ -24,7 +24,7 @@ import org.mockito.Mockito;
  * @see JdbcMetadataHandlerTest.java
  */
 
-public class CassandraMetadataHandlerTest {
+public class  CassandraMetadataHandlerTest {
 
     CqlSession cqlSession;
     private CassandraSessionConfig cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();

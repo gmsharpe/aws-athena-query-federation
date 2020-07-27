@@ -43,14 +43,13 @@ public class CassandraSplitQueryBuilder {
 
     private static final int MILLIS_SHIFT = 12;
 
-    private final String quoteCharacters;
 
-    /**
-     * @param quoteCharacters database quote character for enclosing identifiers.
-     */
-    public CassandraSplitQueryBuilder(String quoteCharacters)
+    private final String CASSANDRA_QUOTE_CHARACTERS = "\"";
+
+
+    public CassandraSplitQueryBuilder()
     {
-        this.quoteCharacters = Validate.notBlank(quoteCharacters, "quoteCharacters must not be blank");
+
     }
 
     /**
@@ -238,8 +237,8 @@ public class CassandraSplitQueryBuilder {
 
     protected String quote(String name)
     {
-        name = name.replace(quoteCharacters, quoteCharacters + quoteCharacters);
-        return quoteCharacters + name + quoteCharacters;
+        name = name.replace(CASSANDRA_QUOTE_CHARACTERS, CASSANDRA_QUOTE_CHARACTERS + CASSANDRA_QUOTE_CHARACTERS);
+        return CASSANDRA_QUOTE_CHARACTERS + name + CASSANDRA_QUOTE_CHARACTERS;
     }
 
     private static class TypeAndValue
