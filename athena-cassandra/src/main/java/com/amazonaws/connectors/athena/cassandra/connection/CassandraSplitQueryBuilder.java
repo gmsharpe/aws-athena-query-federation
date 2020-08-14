@@ -8,6 +8,7 @@ import com.amazonaws.athena.connector.lambda.domain.predicate.ValueSet;
 import com.amazonaws.connectors.athena.cassandra.CassandraMetadataHandler;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -24,6 +25,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -46,6 +49,9 @@ public class CassandraSplitQueryBuilder {
 
     private final String CASSANDRA_QUOTE_CHARACTERS = "\"";
 
+    /**
+     * https://docs.datastax.com/en/developer/java-driver/4.8/manual/query_builder/
+     */
 
     public CassandraSplitQueryBuilder()
     {
@@ -100,8 +106,63 @@ public class CassandraSplitQueryBuilder {
         }
 
         LOGGER.info("Generated SQL : {}", sql.toString());
-        PreparedStatement statement = cqlSession.prepare(sql.toString());
+        System.out.println(sql.toString());
 
+        List<Object> positionalValues = new ArrayList<>();
+
+        // convert accumulator TypeAndValue entries to Cassandra types
+        // TODO all types, converts Arrow values to JDBC.
+        for (int i = 0; i < accumulator.size(); i++) {
+            TypeAndValue typeAndValue = accumulator.get(i);
+
+            Types.MinorType minorTypeForArrowType = Types.getMinorTypeForArrowType(typeAndValue.getType());
+
+            switch (minorTypeForArrowType) {
+                case BIGINT:
+                    positionalValues.add(typeAndValue.getValue());
+                    break;
+                case INT:
+                    positionalValues.add(((Number) typeAndValue.getValue()).intValue());
+                    break;
+                case SMALLINT:
+                    positionalValues.add(((Number) typeAndValue.getValue()).shortValue());
+                    break;
+                case TINYINT:
+                    positionalValues.add( ((Number) typeAndValue.getValue()).byteValue());
+                    break;
+                case FLOAT8:
+                    positionalValues.add( (double) typeAndValue.getValue());
+                    break;
+                case FLOAT4:
+                    positionalValues.add((float) typeAndValue.getValue());
+                    break;
+                case BIT:
+                    positionalValues.add((boolean) typeAndValue.getValue());
+                    break;
+                case DATEDAY:
+                    LocalDateTime dateTime = ((LocalDateTime) typeAndValue.getValue());
+                    positionalValues.add(new Date(dateTime.toDateTime(DateTimeZone.UTC).getMillis()));
+                    break;
+                case DATEMILLI:
+                    LocalDateTime timestamp = ((LocalDateTime) typeAndValue.getValue());
+                    positionalValues.add(new Timestamp(timestamp.toDateTime(DateTimeZone.UTC).getMillis()));
+                    break;
+                case VARCHAR:
+                    positionalValues.add(String.valueOf(typeAndValue.getValue()));
+                    break;
+                case VARBINARY:
+                    positionalValues.add((byte[]) typeAndValue.getValue());
+                    break;
+                case DECIMAL:
+                    ArrowType.Decimal decimalType = (ArrowType.Decimal) typeAndValue.getType();
+                    positionalValues.add(BigDecimal.valueOf((long) typeAndValue.getValue(), decimalType.getScale()));
+                    break;
+                default:
+                    throw new UnsupportedOperationException(String.format("Can't handle type: %s, %s", typeAndValue.getType(), minorTypeForArrowType));
+            }
+        }
+
+        PreparedStatement statement = cqlSession.prepare(SimpleStatement.newInstance(sql.toString()).setPositionalValues(positionalValues));
 
         return statement;
     }
@@ -120,7 +181,17 @@ public class CassandraSplitQueryBuilder {
         }
         tableName.append(quote(table));
 
-        return null;
+        tableName.append(quote(table));
+
+        String partitionSchemaName = split.getProperty(CassandraMetadataHandler.BLOCK_PARTITION_SCHEMA_COLUMN_NAME);
+        String partitionName = split.getProperty(CassandraMetadataHandler.BLOCK_PARTITION_COLUMN_NAME);
+
+        if (CassandraMetadataHandler.ALL_PARTITIONS.equals(partitionSchemaName) || CassandraMetadataHandler.ALL_PARTITIONS.equals(partitionName)) {
+            // No partitions
+            return String.format(" FROM %s ", tableName);
+        }
+
+        return String.format(" FROM %s.%s ", quote(partitionSchemaName), quote(partitionName));
     }
 
     // see PostgresqlSplitqueryBuilder
@@ -136,6 +207,7 @@ public class CassandraSplitQueryBuilder {
         List<String> conjuncts = new ArrayList<>();
         for (Field column : columns) {
             if (partitionSplit.containsKey(column.getName())) {
+                // todo explore the relevance/truth of this statement concerning Cassandra
                 continue; // Ignore constraints on partition name as RDBMS does not contain these as columns. Presto will filter these values.
             }
             ArrowType type = column.getType();

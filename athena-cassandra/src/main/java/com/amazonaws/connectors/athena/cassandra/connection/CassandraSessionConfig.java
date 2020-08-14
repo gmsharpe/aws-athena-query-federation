@@ -9,6 +9,4 @@ public class CassandraSessionConfig {
         return DEFAULT_SESSION_CONFIG;
     }
 
-
-
 }

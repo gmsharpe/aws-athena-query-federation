@@ -29,6 +29,9 @@ import java.util.stream.Collectors;
 
 public class CassandraMetadataHandler extends MetadataHandler {
 
+    public static final String BLOCK_PARTITION_SCHEMA_COLUMN_NAME = "partition_schema_name";
+    public static final String BLOCK_PARTITION_COLUMN_NAME = "partition_name";
+    public static final String ALL_PARTITIONS = "*";
     private final CassandraSessionFactory cassandraSessionFactory;
     private final CassandraSessionConfig cassandraSessionConfig;
 

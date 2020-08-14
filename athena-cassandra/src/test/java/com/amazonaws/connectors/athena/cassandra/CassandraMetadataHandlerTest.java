@@ -12,12 +12,16 @@ import com.amazonaws.services.secretsmanager.AWSSecretsManager;
 import com.amazonaws.services.secretsmanager.model.GetSecretValueRequest;
 import com.amazonaws.services.secretsmanager.model.GetSecretValueResult;
 import com.datastax.oss.driver.api.core.CqlSession;
+
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SyncCqlSession;
+import com.datastax.oss.driver.api.core.session.Session;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
+
+import java.net.InetSocketAddress;
 
 
 /**
@@ -26,11 +30,11 @@ import org.mockito.Mockito;
 
 public class  CassandraMetadataHandlerTest {
 
-    CqlSession cqlSession;
+    //CqlSession cqlSession;
     private CassandraSessionConfig cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();
     private CassandraMetadataHandler cassandraMetadataHandler;
     private CassandraSessionFactory cassandraSessionFactory;
-    private CqlSession session;
+    private CqlSession cqlSession;
     private FederatedIdentity federatedIdentity;
     private AWSSecretsManager secretsManager;
     private AmazonAthena athena;
@@ -40,14 +44,18 @@ public class  CassandraMetadataHandlerTest {
     public void setup()
     {
         this.cassandraSessionFactory = Mockito.mock(CassandraSessionFactory.class);
-        this.session = Mockito.mock(CqlSession.class, Mockito.RETURNS_DEEP_STUBS);
-        Mockito.when(this.cassandraSessionFactory.getSession(Mockito.any(CassandraCredentialProvider.class))).thenReturn(this.session);
+        //this.session = Mockito.mock(CqlSession.class, Mockito.RETURNS_DEEP_STUBS);
+        this.cqlSession = CqlSession.builder().build();//.addContactPoint(InetSocketAddress.createUnresolved("127.0.0.1",9042)).build();
+        System.out.printf("Connected session: %s%n", cqlSession.getName());
+
+        Mockito.when(this.cassandraSessionFactory.getSession(Mockito.any(CassandraCredentialProvider.class))).thenReturn(this.cqlSession);
         this.secretsManager = Mockito.mock(AWSSecretsManager.class);
+
         Mockito.when(this.secretsManager.getSecretValue(Mockito.eq(new GetSecretValueRequest().withSecretId("testSecret")))).thenReturn(new GetSecretValueResult().withSecretString("{\"username\": \"testUser\", \"password\": \"testPassword\"}"));
         this.cassandraMetadataHandler = new CassandraMetadataHandler(cassandraSessionConfig, this.cassandraSessionFactory, this.secretsManager, this.athena);
         this.federatedIdentity = Mockito.mock(FederatedIdentity.class);
-        cqlSession = CqlSession.builder().build();
-        System.out.printf("Connected session: %s%n", cqlSession.getName());
+
+
         this.blockAllocator = Mockito.mock(BlockAllocator.class);
     }
 

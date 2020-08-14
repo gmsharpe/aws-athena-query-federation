@@ -1,5 +1,7 @@
 package com.amazonaws.connectors.athena.cassandra.connection;
 
+import com.amazonaws.athena.connector.lambda.data.BlockAllocator;
+import com.amazonaws.athena.connector.lambda.data.BlockAllocatorImpl;
 import com.amazonaws.athena.connector.lambda.data.FieldBuilder;
 import com.amazonaws.athena.connector.lambda.data.SchemaBuilder;
 import com.amazonaws.athena.connector.lambda.domain.Split;
@@ -8,34 +10,47 @@ import com.amazonaws.athena.connector.lambda.domain.predicate.*;
 import com.amazonaws.connectors.athena.cassandra.CassandraMetadataHandler;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.google.common.collect.ImmutableMap;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import java.util.Arrays;
 import java.util.Collections;
 
-public class CassandraSplitQueryBuilderTest {
+public class CassandraSplitQueryBuilderIT {
 
     // select col_1, col_2 from test_table_1 where attr_1 <= 100
 
     // see PostGreSqlRecordHandlerTest.buildSplitSql()
 
     @Test
+    public void testPrepareStatement(){
+        String sql = "SELECT \"keyspace_name\", \"table_name\", \"column_name\" FROM \"system_schema\".\"columns\" WHERE \"table_name\" = ? AND ((\"position\" > ? ) AND (\"position\" < ?)))";//  AND ((\"test_col_3\" >= ? AND \"test_col_3\" <= ?))\n";
+        System.out.println(sql);
+
+        CqlSession cqlSession = CqlSession.builder().build();
+        cqlSession.prepare(SimpleStatement.newInstance(sql, Arrays.asList("what_up",1,5/*2,10*/)));
+    }
+
+    @Test
     public void testBuildSplit(){
+
+        BlockAllocator allocator = new BlockAllocatorImpl();
+
         TableName tableName = new TableName("test_schema", "test_table_1");
 
         SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder();
-        schemaBuilder.addField(FieldBuilder.newBuilder("test_col_1", Types.MinorType.INT.getType()).build());
-        schemaBuilder.addField(FieldBuilder.newBuilder("test_col_2", Types.MinorType.VARCHAR.getType()).build());
-        schemaBuilder.addField(FieldBuilder.newBuilder("test_col_3", Types.MinorType.DATEDAY.getType()).build());
+        schemaBuilder.addField(FieldBuilder.newBuilder("test_col_1", Types.MinorType.VARCHAR.getType()).build());
+        schemaBuilder.addField(FieldBuilder.newBuilder("test_col_2", Types.MinorType.BIGINT.getType()).build());
+        schemaBuilder.addField(FieldBuilder.newBuilder("test_col_3", Types.MinorType.INT.getType()).build());
         Schema schema = schemaBuilder.build();
 
         CassandraSplitQueryBuilder queryBuilder = new CassandraSplitQueryBuilder();
 
-        CqlSession cqlSession;// = Mockito.mock(CqlSession.class);
-        cqlSession = CqlSession.builder().build();
+        CqlSession cqlSession = CqlSession.builder().build();
         System.out.printf("Connected session: %s%n", cqlSession.getName());
         /*
          final String catalog,
@@ -48,7 +63,8 @@ public class CassandraSplitQueryBuilderTest {
 
         String catalog = "test_catalog";
 
-        ValueSet testCol1 = Mockito.mock(EquatableValueSet.class);
+        ValueSet testCol1 = getSingleValueSet("what_param_might_be_equal_to");/*EquatableValueSet.newBuilder(allocator, Types.MinorType.VARCHAR.getType(), true, false)
+                .add("table-10").build();*/
         ValueSet testCol2 = getRangeSet(Marker.Bound.ABOVE,1, Marker.Bound.BELOW,10);
         ValueSet testCol3 = getRangeSet(Marker.Bound.EXACTLY,5, Marker.Bound.EXACTLY,50);
 
