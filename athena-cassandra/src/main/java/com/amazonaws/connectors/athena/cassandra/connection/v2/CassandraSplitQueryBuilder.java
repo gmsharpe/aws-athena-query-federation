@@ -9,9 +9,12 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
+import com.datastax.oss.driver.api.querybuilder.condition.Condition;
+import com.datastax.oss.driver.api.querybuilder.relation.Relation;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.datastax.oss.driver.api.querybuilder.select.SelectFrom;
 import com.datastax.oss.driver.api.querybuilder.select.Selector;
+import com.datastax.oss.driver.api.querybuilder.term.Term;
 import com.datastax.oss.driver.internal.querybuilder.DefaultRaw;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -63,14 +66,16 @@ public class CassandraSplitQueryBuilder {
 
         Select select = selectFrom.columns(columnNames);
 
-        Statement statement = select.build();
+        List<Relation> clauses = toConjuncts(tableSchema.getFields(), constraints, null);
+
+        Statement statement = select.where(clauses).build();
 
         return statement;
     }
 
-    private List<Selector> toConjuncts(List<Field> columns, Constraints constraints, List<TypeAndValue> accumulator)
+    private List<Relation> toConjuncts(List<Field> columns, Constraints constraints, List<TypeAndValue> accumulator)
     {
-        List<Selector> conjuncts = new ArrayList<>();
+        List<Relation> conjuncts = new ArrayList<>();
         for (Field column : columns) {
             ArrowType type = column.getType();
             if (constraints.getSummary() != null && !constraints.getSummary().isEmpty()) {
@@ -83,34 +88,49 @@ public class CassandraSplitQueryBuilder {
         return conjuncts;
     }
 
+    /**
+     * https://docs.datastax.com/en/developer/java-driver/4.8/manual/query_builder/relation/
+     *
+     * @param columnName
+     * @param valueSet
+     * @param type
+     * @param accumulator
+     * @return
+     */
+
     // todo deconstruct and refactor (from JdbcSplitQueryBuilder)
-    private Selector toPredicate(String columnName, ValueSet valueSet, ArrowType type, List<TypeAndValue> accumulator)
+    private Relation toPredicate(String columnName, ValueSet valueSet, ArrowType type, List<TypeAndValue> accumulator)
     {
-        List<String> disjuncts = new ArrayList<>();
+
+        // https://en.wikipedia.org/wiki/Logical_disjunction
+        List<Relation> disjuncts = new ArrayList<>();
         List<Object> singleValues = new ArrayList<>();
 
         // TODO Add isNone and isAll checks once we have data on nullability.
 
         if (valueSet instanceof SortedRangeSet) {
             if (valueSet.isNone() && valueSet.isNullAllowed()) {
-                return String.format("(%s IS NULL)", columnName);
+                return Relation.column(columnName).isEqualTo(literal(null));
             }
-
+/*
+            // TODO figure out how to express 'OR' in Cassandra Query Builder
             if (valueSet.isNullAllowed()) {
-                disjuncts.add(String.format("(%s IS NULL)", columnName));
+                disjuncts.add(Relation.column(columnName).isEqualTo(literal(null)));
             }
+*/
 
             Range rangeSpan = ((SortedRangeSet) valueSet).getSpan();
             if (!valueSet.isNullAllowed() && rangeSpan.getLow().isLowerUnbounded() && rangeSpan.getHigh().isUpperUnbounded()) {
-                return String.format("(%s IS NOT NULL)", columnName);
+                return  Relation.column(columnName).isNotNull();
             }
         }
 
-        return "(" + Joiner.on(" OR ").join(disjuncts) + ")";
+        return null;
+        //return "(" + Joiner.on(" OR ").join(disjuncts) + ")";
     }
 
     // todo deconstruct and refactor (from JdbcSplitQueryBuilder)
-    private Selector toPredicate(String columnName, String operator, Object value, ArrowType type,
+    private Condition toPredicate(String columnName, String operator, Object value, ArrowType type,
                                List<TypeAndValue> accumulator)
     {
         accumulator.add(new TypeAndValue(type, value));

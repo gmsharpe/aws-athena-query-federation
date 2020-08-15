@@ -20,3 +20,9 @@ The Athena AWS Cassandra Connector provides several configuration options via La
 3. **kms_key_id** - (Optional) By default any data that is spilled to S3 is encrypted using AES-GCM and a randomly generated key. Setting a KMS Key ID allows your Lambda function to use KMS for key generation for a stronger source of encryption keys. (e.g. a7e63k4b-8loc-40db-a2a1-4d0en2cd8331)
 4. **disable_spill_encryption** - (Optional) Defaults to False so that any data that is spilled to S3 is encrypted using AES-GMC either with a randomly generated key or using KMS to generate keys. Setting this to false will disable spill encryption. You may wish to disable this for improved performance, especially if your spill location in S3 uses S3 Server Side Encryption. (e.g. True or False)
 5. _**more to come**_ - .............
+
+
+#### Useful Cassandra Links
+
+* https://docs.datastax.com/en/developer/java-driver/4.8/manual/query_builder/
+* https://docs.datastax.com/en/developer/java-driver/4.8/
