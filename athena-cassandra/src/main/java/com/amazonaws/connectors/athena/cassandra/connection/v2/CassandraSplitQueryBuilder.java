@@ -113,7 +113,7 @@ public class CassandraSplitQueryBuilder {
                 return Relation.column(columnName).isEqualTo(literal(null));
             }
 /*
-            // TODO figure out how to express 'OR' in Cassandra Query Builder
+            // TODO or statement not allowed, so need to figure out how to use add disjuncts
             if (valueSet.isNullAllowed()) {
                 disjuncts.add(Relation.column(columnName).isEqualTo(literal(null)));
             }
@@ -123,18 +123,38 @@ public class CassandraSplitQueryBuilder {
             if (!valueSet.isNullAllowed() && rangeSpan.getLow().isLowerUnbounded() && rangeSpan.getHigh().isUpperUnbounded()) {
                 return  Relation.column(columnName).isNotNull();
             }
+
         }
 
+        for (Range range : valueSet.getRanges().getOrderedRanges()) {
+            if (range.isSingleValue()) {
+                singleValues.add(range.getLow().getValue());
+            }
+        }
+
+        if (singleValues.size() == 1) {
+            // no way known for adding disjuncts, yet
+            //disjuncts.add(toPredicate(columnName, "=", Iterables.getOnlyElement(singleValues), type, accumulator));
+            return toPredicate(columnName, "=", Iterables.getOnlyElement(singleValues), type, accumulator);
+        }
+
+        // no 'or' statement in Cassandra.  Can use a where ... in ( ... )
+        // https://stackoverflow.com/questions/10139390/alternative-for-or-condition-after-where-clause-in-select-statement-cassandra
         return null;
-        //return "(" + Joiner.on(" OR ").join(disjuncts) + ")";
     }
 
     // todo deconstruct and refactor (from JdbcSplitQueryBuilder)
-    private Condition toPredicate(String columnName, String operator, Object value, ArrowType type,
+    private Relation toPredicate(String columnName, String operator, Object value, ArrowType type,
                                List<TypeAndValue> accumulator)
     {
-        accumulator.add(new TypeAndValue(type, value));
-        return new DefaultRaw(columnName + " " + operator + " " + value);
+        //accumulator.add(new TypeAndValue(type, value));
+        switch (operator) {
+            case "=":
+                return Relation.column(columnName).isEqualTo(literal(value));
+            default:
+                throw new IllegalArgumentException("unsupported operator");
+        }
+
     }
 
     private static class TypeAndValue
