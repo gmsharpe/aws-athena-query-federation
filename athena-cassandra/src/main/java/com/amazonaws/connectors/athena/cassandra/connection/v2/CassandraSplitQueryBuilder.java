@@ -9,13 +9,11 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
+import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.condition.Condition;
 import com.datastax.oss.driver.api.querybuilder.relation.Relation;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.datastax.oss.driver.api.querybuilder.select.SelectFrom;
-import com.datastax.oss.driver.api.querybuilder.select.Selector;
-import com.datastax.oss.driver.api.querybuilder.term.Term;
-import com.datastax.oss.driver.internal.querybuilder.DefaultRaw;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
@@ -24,11 +22,16 @@ import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.commons.lang3.Validate;
 
-// For DML queries, such as SELECT
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.*;
+import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.literal;
+import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.selectFrom;
+
+// For DML queries, such as SELECT
 
 public class CassandraSplitQueryBuilder {
 
@@ -69,6 +72,7 @@ public class CassandraSplitQueryBuilder {
         List<Relation> clauses = toConjuncts(tableSchema.getFields(), constraints, null);
 
         Statement statement = select.where(clauses).build();
+        System.out.println(((SimpleStatement) statement).getQuery());
 
         return statement;
     }
@@ -81,7 +85,7 @@ public class CassandraSplitQueryBuilder {
             if (constraints.getSummary() != null && !constraints.getSummary().isEmpty()) {
                 ValueSet valueSet = constraints.getSummary().get(column.getName());
                 if (valueSet != null) {
-                    conjuncts.add(toPredicate(column.getName(), valueSet, type, accumulator));
+                    conjuncts.addAll(toPredicate(column.getName(), valueSet, type, accumulator));
                 }
             }
         }
@@ -99,29 +103,31 @@ public class CassandraSplitQueryBuilder {
      */
 
     // todo deconstruct and refactor (from JdbcSplitQueryBuilder)
-    private Relation toPredicate(String columnName, ValueSet valueSet, ArrowType type, List<TypeAndValue> accumulator)
+    private List<Relation> toPredicate(String columnName, ValueSet valueSet, ArrowType type, List<TypeAndValue> accumulator)
     {
 
         // https://en.wikipedia.org/wiki/Logical_disjunction
-        List<Relation> disjuncts = new ArrayList<>();
+        List<Relation> relations = new ArrayList<>();
         List<Object> singleValues = new ArrayList<>();
 
         // TODO Add isNone and isAll checks once we have data on nullability.
 
         if (valueSet instanceof SortedRangeSet) {
             if (valueSet.isNone() && valueSet.isNullAllowed()) {
-                return Relation.column(columnName).isEqualTo(literal(null));
+                return Collections.singletonList(Relation.column(columnName).isEqualTo(literal(null)));
             }
-/*
-            // TODO or statement not allowed, so need to figure out how to use add disjuncts
-            if (valueSet.isNullAllowed()) {
+
+            // TODO 'or' not allowed, so need to figure out how to add disjuncts
+            // https://stackoverflow.com/questions/10139390/alternative-for-or-condition-after-where-clause-in-select-statement-cassandra
+            // https://thelastpickle.com/blog/2016/09/15/Null-bindings-on-prepared-statements-and-undesired-tombstone-creation.html
+/*            if (valueSet.isNullAllowed()) {
                 disjuncts.add(Relation.column(columnName).isEqualTo(literal(null)));
-            }
-*/
+            }*/
+
 
             Range rangeSpan = ((SortedRangeSet) valueSet).getSpan();
             if (!valueSet.isNullAllowed() && rangeSpan.getLow().isLowerUnbounded() && rangeSpan.getHigh().isUpperUnbounded()) {
-                return  Relation.column(columnName).isNotNull();
+                return  Arrays.asList(Relation.column(columnName).isNotNull());
             }
 
         }
@@ -130,17 +136,54 @@ public class CassandraSplitQueryBuilder {
             if (range.isSingleValue()) {
                 singleValues.add(range.getLow().getValue());
             }
+            else {
+                List<Relation> rangeConjuncts = new ArrayList<>();
+                if (!range.getLow().isLowerUnbounded()) {
+                    switch (range.getLow().getBound()) {
+                        case ABOVE:
+                            rangeConjuncts.add(toPredicate(columnName, ">", range.getLow().getValue(), type, accumulator));
+                            break;
+                        case EXACTLY:
+                            rangeConjuncts.add(toPredicate(columnName, ">=", range.getLow().getValue(), type, accumulator));
+                            break;
+                        case BELOW:
+                            throw new IllegalArgumentException("Low marker should never use BELOW bound");
+                        default:
+                            throw new AssertionError("Unhandled bound: " + range.getLow().getBound());
+                    }
+                }
+                if (!range.getHigh().isUpperUnbounded()) {
+                    switch (range.getHigh().getBound()) {
+                        case ABOVE:
+                            throw new IllegalArgumentException("High marker should never use ABOVE bound");
+                        case EXACTLY:
+                            rangeConjuncts.add(toPredicate(columnName, "<=", range.getHigh().getValue(), type, accumulator));
+                            break;
+                        case BELOW:
+                            rangeConjuncts.add(toPredicate(columnName, "<", range.getHigh().getValue(), type, accumulator));
+                            break;
+                        default:
+                            throw new AssertionError("Unhandled bound: " + range.getHigh().getBound());
+                    }
+                }
+                // If rangeConjuncts is null, then the range was ALL, which should already have been checked for
+                Preconditions.checkState(!rangeConjuncts.isEmpty());
+                relations.addAll(rangeConjuncts);
+            }
         }
 
         if (singleValues.size() == 1) {
             // no way known for adding disjuncts, yet
-            //disjuncts.add(toPredicate(columnName, "=", Iterables.getOnlyElement(singleValues), type, accumulator));
-            return toPredicate(columnName, "=", Iterables.getOnlyElement(singleValues), type, accumulator);
+            return Arrays.asList(toPredicate(columnName, "=", Iterables.getOnlyElement(singleValues), type, accumulator));
+        }
+        else if (singleValues.size() > 1) {
+            for (Object value : singleValues) {
+                accumulator.add(new TypeAndValue(type, value));
+            }
+            relations.add(Relation.column(columnName).in(singleValues.stream().map(QueryBuilder::literal).collect(Collectors.toList())));
         }
 
-        // no 'or' statement in Cassandra.  Can use a where ... in ( ... )
-        // https://stackoverflow.com/questions/10139390/alternative-for-or-condition-after-where-clause-in-select-statement-cassandra
-        return null;
+        return relations;
     }
 
     // todo deconstruct and refactor (from JdbcSplitQueryBuilder)
@@ -151,6 +194,14 @@ public class CassandraSplitQueryBuilder {
         switch (operator) {
             case "=":
                 return Relation.column(columnName).isEqualTo(literal(value));
+            case ">":
+                return Relation.column(columnName).isGreaterThan(literal(value));
+            case ">=":
+                return Relation.column(columnName).isGreaterThanOrEqualTo(literal(value));
+            case "<":
+                return Relation.column(columnName).isLessThan(literal(value));
+            case "<=":
+                return Relation.column(columnName).isLessThanOrEqualTo(literal(value));
             default:
                 throw new IllegalArgumentException("unsupported operator");
         }

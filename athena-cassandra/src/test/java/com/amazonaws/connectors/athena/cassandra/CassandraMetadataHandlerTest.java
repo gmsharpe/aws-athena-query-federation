@@ -25,7 +25,7 @@ import java.net.InetSocketAddress;
 
 
 /**
- * @see JdbcMetadataHandlerTest.java
+ * From <code>JdbcMetadataHandlerTest</code>
  */
 
 public class  CassandraMetadataHandlerTest {

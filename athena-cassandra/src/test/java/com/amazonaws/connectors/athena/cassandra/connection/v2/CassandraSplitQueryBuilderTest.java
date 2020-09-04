@@ -24,6 +24,9 @@ import java.util.Date;
 
 import static org.junit.Assert.assertEquals;
 
+/*
+    docker run --name cassandra -p 9042:9042 -d cassandra:latest
+ */
 public class CassandraSplitQueryBuilderTest {
 
 
@@ -41,16 +44,7 @@ public class CassandraSplitQueryBuilderTest {
     public void setup(){
         tableName = new TableName("test_schema", "test_table_1");
 
-        SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder()
-                .addField(FieldBuilder.newBuilder("test_col_1", Types.MinorType.INT.getType()).build())
-                .addField(FieldBuilder.newBuilder("test_col_2", Types.MinorType.VARCHAR.getType()).build())
-                .addField(FieldBuilder.newBuilder("test_col_3", Types.MinorType.BIGINT.getType()).build())
-                .addField(FieldBuilder.newBuilder("test_col_4", Types.MinorType.FLOAT4.getType()).build())
-                .addField(FieldBuilder.newBuilder("test_col_5", Types.MinorType.SMALLINT.getType()).build())
-                .addField(FieldBuilder.newBuilder("test_col_6", Types.MinorType.TINYINT.getType()).build())
-                .addField(FieldBuilder.newBuilder("test_col_7", Types.MinorType.FLOAT8.getType()).build())
-                .addField(FieldBuilder.newBuilder("test_col_8", Types.MinorType.BIT.getType()).build());
-        schema = schemaBuilder.build();
+
 
         split = Mockito.mock(Split.class);
         Mockito.when(split.getProperties())
@@ -72,6 +66,12 @@ public class CassandraSplitQueryBuilderTest {
     @Test
     public void simpleQueryTest() {
 
+        SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder()
+                .addField(FieldBuilder.newBuilder("test_col_1", Types.MinorType.INT.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_2", Types.MinorType.VARCHAR.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_3", Types.MinorType.BIGINT.getType()).build());
+        schema = schemaBuilder.build();
+
         CassandraSplitQueryBuilder queryBuilder = new CassandraSplitQueryBuilder();
 
         Statement statement = queryBuilder.buildSql(cqlSession, "catalog", "test_schema", "test_table_1", schema, constraints, split);
@@ -87,6 +87,13 @@ public class CassandraSplitQueryBuilderTest {
     // select x, y, z from table where x = [int, string, date, boolean]
     @Test
     public void simpleQueryWithOneConditionTest() {
+
+        SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder()
+                .addField(FieldBuilder.newBuilder("test_col_1", Types.MinorType.INT.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_2", Types.MinorType.VARCHAR.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_3", Types.MinorType.BIGINT.getType()).build());
+
+        schema = schemaBuilder.build();
 
         CassandraSplitQueryBuilder queryBuilder = new CassandraSplitQueryBuilder();
 
@@ -107,6 +114,13 @@ public class CassandraSplitQueryBuilderTest {
     // select x, y, z from table where x = int and y = string
     @Test
     public void simpleQueryWithTwoConditionTest() {
+
+        SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder()
+                .addField(FieldBuilder.newBuilder("test_col_1", Types.MinorType.INT.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_2", Types.MinorType.VARCHAR.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_3", Types.MinorType.BIGINT.getType()).build());
+
+        schema = schemaBuilder.build();
 
         CassandraSplitQueryBuilder queryBuilder = new CassandraSplitQueryBuilder();
 
@@ -129,6 +143,18 @@ public class CassandraSplitQueryBuilderTest {
     // select a, b, c, d, e, f from table where a = int and b = string and c = boolean and d = date .... and ? = ?
     @Test
     public void simpleQueryWithNConditionsOfManyTypesTest() {
+
+        SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder()
+                .addField(FieldBuilder.newBuilder("test_col_1", Types.MinorType.INT.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_2", Types.MinorType.VARCHAR.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_3", Types.MinorType.BIGINT.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_4", Types.MinorType.FLOAT4.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_5", Types.MinorType.SMALLINT.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_6", Types.MinorType.TINYINT.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_7", Types.MinorType.FLOAT8.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_8", Types.MinorType.BIT.getType()).build());
+        schema = schemaBuilder.build();
+
 
         CassandraSplitQueryBuilder queryBuilder = new CassandraSplitQueryBuilder();
 
@@ -169,11 +195,25 @@ public class CassandraSplitQueryBuilderTest {
     @Test
     public void simpleQueryWithIsNotNull() {
 
+        SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder()
+                .addField(FieldBuilder.newBuilder("test_col_1", Types.MinorType.INT.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_2", Types.MinorType.VARCHAR.getType()).build())
+                .addField(FieldBuilder.newBuilder("test_col_3", Types.MinorType.BIGINT.getType()).build());
+
+        schema = schemaBuilder.build();
+
+        Range range1a = Mockito.mock(Range.class, Mockito.RETURNS_DEEP_STUBS);
+        Mockito.when(range1a.getLow().isLowerUnbounded()).thenReturn(true);
+        Mockito.when(range1a.getHigh().isUpperUnbounded()).thenReturn(true);
+        SortedRangeSet valueSet1 = Mockito.mock(SortedRangeSet.class, Mockito.RETURNS_DEEP_STUBS);
+        Mockito.when(valueSet1.isNullAllowed()).thenReturn(false);
+        Mockito.when(valueSet1.getSpan()).thenReturn(range1a);
+
         CassandraSplitQueryBuilder queryBuilder = new CassandraSplitQueryBuilder();
 
         Constraints constraints = Mockito.mock(Constraints.class);
         Mockito.when(constraints.getSummary()).thenReturn(new ImmutableMap.Builder<String, ValueSet>()
-                .put("test_col_1", getNotNullValueSet())
+                .put("test_col_1", valueSet1)
                 .build());
 
         Statement statement = queryBuilder.buildSql(cqlSession, "catalog", "test_schema", "test_table_1", schema, constraints, split);
@@ -185,6 +225,10 @@ public class CassandraSplitQueryBuilderTest {
 
     }
 
+
+
+
+
     private ValueSet getSingleValueSet(Object value) {
         Range range = Mockito.mock(Range.class, Mockito.RETURNS_DEEP_STUBS);
         Mockito.when(range.isSingleValue()).thenReturn(true);
@@ -194,11 +238,12 @@ public class CassandraSplitQueryBuilderTest {
         return valueSet;
     }
 
+    // not working for some reason.
     private ValueSet getNotNullValueSet(){
-        Range range1a = Mockito.mock(Range.class);
+        Range range1a = Mockito.mock(Range.class, Mockito.RETURNS_DEEP_STUBS);
         Mockito.when(range1a.getLow().isLowerUnbounded()).thenReturn(true);
         Mockito.when(range1a.getHigh().isUpperUnbounded()).thenReturn(true);
-        SortedRangeSet valueSet1 = Mockito.mock(SortedRangeSet.class);
+        SortedRangeSet valueSet1 = Mockito.mock(SortedRangeSet.class, Mockito.RETURNS_DEEP_STUBS);
         Mockito.when(valueSet1.isNullAllowed()).thenReturn(false);
         Mockito.when(valueSet1.getSpan()).thenReturn(range1a);
         return valueSet1;
