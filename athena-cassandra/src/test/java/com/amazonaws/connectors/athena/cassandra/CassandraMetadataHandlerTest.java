@@ -1,6 +1,8 @@
 package com.amazonaws.connectors.athena.cassandra;
 
 import com.amazonaws.athena.connector.lambda.data.BlockAllocator;
+import com.amazonaws.athena.connector.lambda.data.SchemaBuilder;
+import com.amazonaws.athena.connector.lambda.domain.TableName;
 import com.amazonaws.athena.connector.lambda.metadata.ListTablesRequest;
 import com.amazonaws.athena.connector.lambda.metadata.ListTablesResponse;
 import com.amazonaws.athena.connector.lambda.security.FederatedIdentity;
@@ -17,11 +19,13 @@ import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SyncCqlSession;
 import com.datastax.oss.driver.api.core.session.Session;
+import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
 import java.net.InetSocketAddress;
+import java.sql.SQLException;
 
 
 /**
@@ -101,7 +105,11 @@ public class  CassandraMetadataHandlerTest {
     }
 
     @Test
-    public void doGetSchema(){
+    public void doGetSchema() throws SQLException {
+
+        Schema schema = cassandraMetadataHandler.getSchema(cqlSession,new TableName("nytaxi","fares"), SchemaBuilder.newBuilder().build());
+
+        System.out.println(schema.toJson());
 
     }
 

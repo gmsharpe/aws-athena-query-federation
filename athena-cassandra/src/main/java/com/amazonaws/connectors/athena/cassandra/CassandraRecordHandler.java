@@ -1,10 +1,8 @@
 package com.amazonaws.connectors.athena.cassandra;
 
-import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.athena.connector.lambda.QueryStatusChecker;
 import com.amazonaws.athena.connector.lambda.data.Block;
 import com.amazonaws.athena.connector.lambda.data.BlockSpiller;
-import com.amazonaws.athena.connector.lambda.data.FieldResolver;
 import com.amazonaws.athena.connector.lambda.data.writers.GeneratedRowWriter;
 import com.amazonaws.athena.connector.lambda.data.writers.extractors.*;
 import com.amazonaws.athena.connector.lambda.data.writers.holders.NullableVarBinaryHolder;
@@ -16,12 +14,11 @@ import com.amazonaws.athena.connector.lambda.handlers.RecordHandler;
 import com.amazonaws.athena.connector.lambda.records.ReadRecordsRequest;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionConfig;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionFactory;
-import com.amazonaws.connectors.athena.cassandra.connection.v2.CassandraSplitQueryBuilder;
+import com.amazonaws.connectors.athena.cassandra.connection.CassandraSplitQueryBuilder;
 import com.amazonaws.services.athena.AmazonAthena;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.secretsmanager.AWSSecretsManager;
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.core.cql.Statement;
@@ -30,19 +27,12 @@ import org.apache.arrow.vector.holders.*;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
-import org.joda.time.DateTime;
-import org.joda.time.Days;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class CassandraRecordHandler
         extends RecordHandler {
@@ -150,6 +140,8 @@ public class CassandraRecordHandler
      * Creates an Extractor for the given field. In this example the extractor just creates some random data.
      */
     private Extractor makeExtractor(Field field, ResultSet resultSet, Map<String, String> partitionValues) {
+
+        // why get the MinorType?
         Types.MinorType fieldType = Types.getMinorTypeForArrowType(field.getType());
 
         Row row = resultSet.one();
@@ -165,6 +157,11 @@ public class CassandraRecordHandler
         }
 
         /**
+         *
+         * This currently maps Arrow -> Cassandra, however, it is used to extract an Arrow value from the Cassandra Type, and there
+         * are not one to one mappings.  Example:  MinorType.VARCHAR -> could be used to map to UUID, Text, VARCHAR, but should
+         * it be used this way?
+         *
          * for LocalDate and LocalTime conversions:  https://www.concretepage.com/java/java-8/convert-between-java-localdate-epoch
          *
          * NOTE:  TODO there are more Cassandra Data Types (and associated Arrow Minor Types) that could be extracted here.

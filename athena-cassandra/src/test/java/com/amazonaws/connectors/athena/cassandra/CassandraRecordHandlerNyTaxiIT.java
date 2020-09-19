@@ -94,7 +94,7 @@ public class CassandraRecordHandlerNyTaxiIT {
         cqlSession = CqlSession.builder().build();
 
         schemaForRead = SchemaBuilder.newBuilder()
-                .addField("id", new ArrowType.Int(32, true))
+                .addField("id", Types.MinorType.VARCHAR.getType())
                 .addField("medallion", Types.MinorType.VARCHAR.getType())
                 .addField("hack_license", Types.MinorType.VARCHAR.getType())
                 .addField("vendor_id", Types.MinorType.VARCHAR.getType())
@@ -104,8 +104,8 @@ public class CassandraRecordHandlerNyTaxiIT {
                 .addField("surcharge",  new ArrowType.Decimal(10, 2))
                 .addField("mta_tax",  new ArrowType.Decimal(10, 2))
                 .addField("tip_amount",  new ArrowType.Decimal(10, 2))
-                .addField("tolls_amount_decimal",  new ArrowType.Decimal(10, 2))
-                .addField("total_amount_decimal",  new ArrowType.Decimal(10, 2))
+                .addField("tolls_amount",  new ArrowType.Decimal(10, 2))
+                .addField("total_amount",  new ArrowType.Decimal(10, 2))
                 .addField("hack_license",  new ArrowType.Decimal(10, 2))
                 .build();
 
@@ -163,15 +163,15 @@ public class CassandraRecordHandlerNyTaxiIT {
             logger.info("doReadRecordsNoSpill: Using encryptionKey[" + encryptionKey + "]");
 
             Map<String, ValueSet> constraintsMap = new HashMap<>();
-            constraintsMap.put("fare_amount", SortedRangeSet.copyOf(Types.MinorType.DECIMAL.getType(),
-                    ImmutableList.of(Range.greaterThan(allocator, Types.MinorType.DECIMAL.getType(), 20.0D)), false));
+            constraintsMap.put("fare_amount", SortedRangeSet.copyOf(Types.MinorType.FLOAT8.getType(),
+                    ImmutableList.of(Range.greaterThan(allocator, Types.MinorType.FLOAT8.getType(), 20.0D)), false));
 
             ReadRecordsRequest request = new ReadRecordsRequest(IdentityUtil.fakeIdentity(),
                     "catalog",
                     "queryId-" + System.currentTimeMillis(),
                     new TableName("nytaxi", "fares"),
                     schemaForRead,
-                    Split.newBuilder(makeSpillLocation(), encryptionKey).add("year", "10").add("month", "10").add("day", "10").build(),
+                    Split.newBuilder(makeSpillLocation(), encryptionKey).build(),
                     new Constraints(constraintsMap),
                     100_000_000_000L, //100GB don't expect this to spill
                     100_000_000_000L

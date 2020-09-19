@@ -11,6 +11,7 @@ import com.amazonaws.connectors.athena.cassandra.CassandraMetadataHandler;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
+import com.datastax.oss.driver.api.core.cql.Statement;
 import com.google.common.collect.ImmutableMap;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -78,9 +79,9 @@ public class CassandraSplitQueryBuilderIT {
         Mockito.when(split.getProperty(Mockito.eq(CassandraMetadataHandler.BLOCK_PARTITION_SCHEMA_COLUMN_NAME))).thenReturn("s0");
         Mockito.when(split.getProperty(Mockito.eq(CassandraMetadataHandler.BLOCK_PARTITION_COLUMN_NAME))).thenReturn("p0");
 
-        PreparedStatement stmt = queryBuilder.buildSql(cqlSession, catalog, tableName.getSchemaName(),tableName.getTableName(), schema, constraints, split);
+        Statement stmt = queryBuilder.buildSql(cqlSession, catalog, tableName.getSchemaName(),tableName.getTableName(), schema, constraints, split);
 
-        System.out.println(stmt.getQuery());
+        System.out.println(((SimpleStatement)stmt).getQuery());
 
     }
 

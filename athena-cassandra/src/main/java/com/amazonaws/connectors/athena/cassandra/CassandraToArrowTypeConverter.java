@@ -1,10 +1,14 @@
 package com.amazonaws.connectors.athena.cassandra;
 
+import com.datastax.oss.driver.api.core.type.DataType;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 
 public class CassandraToArrowTypeConverter {
 
     /**
+     *
+     * see {@code JdbcToArrowUtils}
+     * see {@code JdbcArrowTypeConverter}
      *
      * from: https://cassandra.apache.org/doc/latest/cql/types.html (07/22/2020)
      *
@@ -53,6 +57,59 @@ public class CassandraToArrowTypeConverter {
      */
 
     public static ArrowType toArrowType(String type, int position, String clustering_order) {
+        DataType dt;
+
+        switch(type){
+            case "asci":
+                return null;
+            case "bigint":
+                return null;
+            case "blob":
+                return null;
+            case "boolean":
+                return null;
+            case "counter":
+                return null;
+            case "date":
+                return null;
+            case "decimal":
+                return null;
+            case "double":
+                return null;
+            case "duration":
+                return null;
+            case "float":
+                return null;
+            case "inet":
+                return null;
+            case "int":
+                return null;
+            case "smallint":
+                return null;
+            case "text":
+                return null;
+            case "time":
+                return null;
+            case "timestamp":
+                return null;
+            case "timeuuid":
+                return null;
+            case "tinyint":
+                return null;
+            case "uuid":
+                return null;
+            /*case "varchar":  // todo - does this one exist?
+                return null;*/
+            case "varint":
+                return null;
+            case "list":
+                return null;
+            case "map":
+                return null;
+            case "set":
+                return null;
+        }
+
 
         return null;
 
