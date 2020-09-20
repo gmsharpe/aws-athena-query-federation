@@ -7,6 +7,7 @@ import org.apache.arrow.vector.complex.reader.VarCharReader;
 import org.apache.arrow.vector.types.DateUnit;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.TimeUnit;
+import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 
 import static com.datastax.oss.driver.api.core.type.DataTypes.*;
@@ -131,6 +132,7 @@ public class CassandraToArrowUtils {
         put(DATE.getProtocolCode(), () -> new ArrowType.Date(DateUnit.DAY));
         put(TIMEUUID.getProtocolCode(), () -> new ArrowType.Date(DateUnit.MILLISECOND));
         put(TIMESTAMP.getProtocolCode(), () -> new ArrowType.Date(DateUnit.MILLISECOND));
+        put(UUID.getProtocolCode(), () -> new ArrowType.FixedSizeBinary(16));
     }};
 
     public static final DataType getCassandraDataType(String type) {

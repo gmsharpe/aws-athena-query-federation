@@ -7,6 +7,7 @@ import com.amazonaws.athena.connector.lambda.data.writers.GeneratedRowWriter;
 import com.amazonaws.athena.connector.lambda.data.writers.extractors.*;
 import com.amazonaws.athena.connector.lambda.data.writers.holders.NullableVarBinaryHolder;
 import com.amazonaws.athena.connector.lambda.data.writers.holders.NullableVarCharHolder;
+import com.amazonaws.athena.connector.lambda.data.writers.holders.NullableFixedSizeBinaryHolder;
 import com.amazonaws.athena.connector.lambda.domain.Split;
 import com.amazonaws.athena.connector.lambda.domain.TableName;
 import com.amazonaws.athena.connector.lambda.domain.predicate.Constraints;
@@ -15,13 +16,13 @@ import com.amazonaws.athena.connector.lambda.records.ReadRecordsRequest;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionConfig;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionFactory;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSplitQueryBuilder;
+import com.amazonaws.athena.connector.lambda.data.writers.extractors.FixedSizeBinaryExtractor;
 import com.amazonaws.services.athena.AmazonAthena;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.secretsmanager.AWSSecretsManager;
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.cql.ResultSet;
-import com.datastax.oss.driver.api.core.cql.Row;
-import com.datastax.oss.driver.api.core.cql.Statement;
+import com.datastax.oss.driver.api.core.cql.*;
+import com.datastax.oss.driver.api.core.type.DataTypes;
 import org.apache.arrow.util.VisibleForTesting;
 import org.apache.arrow.vector.holders.*;
 import org.apache.arrow.vector.types.Types;
@@ -108,7 +109,8 @@ public class CassandraRecordHandler
 
                     GeneratedRowWriter.RowWriterBuilder rowWriterBuilder = GeneratedRowWriter.newBuilder(readRecordsRequest.getConstraints());
                     for (Field next : readRecordsRequest.getSchema().getFields()) {
-                        Extractor extractor = makeExtractor(next, resultSet, partitionValues);
+                        // use first row in resultSet to make extractors
+                        Extractor extractor = makeExtractor(next, resultSet.one(), partitionValues);
                         rowWriterBuilder.withExtractor(next.getName(), extractor);
                     }
 
@@ -121,7 +123,7 @@ public class CassandraRecordHandler
                         if (!queryStatusChecker.isQueryRunning()) {
                             return;
                         }
-                        blockSpiller.writeRows((Block block, int rowNum) -> rowWriter.writeRow(block, rowNum, resultSet) ? 1 : 0);
+                        blockSpiller.writeRows((Block block, int rowNum) -> rowWriter.writeRow(block, rowNum, rows.next()) ? 1 : 0);
                         rowsReturnedFromDatabase++;
                     }
                     logger.info("{} rows returned by database.", rowsReturnedFromDatabase);
@@ -139,12 +141,10 @@ public class CassandraRecordHandler
      * Borrowed From : <code>JdbcRecordHandler</code>
      * Creates an Extractor for the given field. In this example the extractor just creates some random data.
      */
-    private Extractor makeExtractor(Field field, ResultSet resultSet, Map<String, String> partitionValues) {
+    private Extractor makeExtractor(Field field, Row row, Map<String, String> partitionValues) {
 
         // why get the MinorType?
         Types.MinorType fieldType = Types.getMinorTypeForArrowType(field.getType());
-
-        Row row = resultSet.one();
 
         final String fieldName = field.getName();
 
@@ -238,15 +238,31 @@ public class CassandraRecordHandler
             case VARCHAR:
                 return (VarCharExtractor) (Object context, NullableVarCharHolder dst) ->
                 {
-                    dst.value = row.getString(fieldName);
-                    dst.isSet = row.isNull(fieldName) ? 0 : 1;
+                        dst.value = row.getString(fieldName);
+                        dst.isSet = row.isNull(fieldName) ? 0 : 1;
                 };
             case VARBINARY:
                 return (VarBinaryExtractor) (Object context, NullableVarBinaryHolder dst) ->
                 {
-                    dst.value = row.getByteBuffer(fieldName).array();
-                    dst.isSet = row.isNull(fieldName) ? 0 : 1;
+                    ColumnDefinition colDef = row.getColumnDefinitions().get(fieldName);
+                    if(colDef.getType().getProtocolCode() ==  DataTypes.UUID.getProtocolCode()) {
+                        dst.value = row.getUuid(fieldName).toString().getBytes();
+                        dst.isSet = row.isNull(fieldName) ? 0 : 1;
+                    }
+                    else {
+                        dst.value = row.getByteBuffer(fieldName).array();
+                        dst.isSet = row.isNull(fieldName) ? 0 : 1;
+                    }
                 };
+/*            case FIXEDSIZEBINARY:
+                return (FixedSizeBinaryExtractor)(Object context, NullableFixedSizeBinaryHolder dst) -> {
+                    ColumnDefinition colDef = row.getColumnDefinitions().get(fieldName);
+                    if(colDef.getType().getProtocolCode() ==  DataTypes.UUID.getProtocolCode()){
+                        dst.byteWidth = 16;
+                        dst.value = row.getUuid(fieldName).toString().getBytes();
+                        dst.isSet = row.isNull(fieldName) ? 0 : 1;
+                    }
+            };*/
             default:
                 throw new RuntimeException("Unhandled type " + fieldType);
         }

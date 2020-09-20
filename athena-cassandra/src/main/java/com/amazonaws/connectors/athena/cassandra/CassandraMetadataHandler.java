@@ -236,7 +236,7 @@ public class CassandraMetadataHandler extends MetadataHandler {
             }
 
 
-            // get partition_keys
+            // get clustering_keys?
             ResultSet clusteringKeysResultSet = cqlSession.execute("SELECT * FROM system_schema.columns WHERE keyspace_name = '"
                     + getTableLayoutRequest.getTableName().getSchemaName()
                     + "' and table_name = '"
