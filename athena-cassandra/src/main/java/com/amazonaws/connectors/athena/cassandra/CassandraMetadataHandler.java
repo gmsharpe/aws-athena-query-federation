@@ -15,22 +15,18 @@ import com.amazonaws.services.secretsmanager.AWSSecretsManager;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
-import com.datastax.oss.driver.api.core.cql.Statement;
+import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.commons.lang3.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.stream.Collectors;
-
-import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.selectFrom;
 
 public class CassandraMetadataHandler extends MetadataHandler {
 
@@ -118,14 +114,32 @@ public class CassandraMetadataHandler extends MetadataHandler {
 
     }
 
+    /**
+     *
+     * references:
+     *  JdbcMetadataHandler
+     */
+
     @Override
     public GetTableResponse doGetTable(BlockAllocator allocator, GetTableRequest request) throws Exception {
 
         LOGGER.info("doGetTable: enter", request.getTableName());
-        Schema origSchema = null;
+
+        try (CqlSession cassandraCqlSession = cassandraSessionFactory.getSession()) {
+
+            Schema schema = getSchema(cassandraCqlSession,request.getTableName(),null);
+
+            GetTableResponse getTableResponse = new GetTableResponse(null, request.getTableName(), schema, null);
+
+            return getTableResponse;
+
+        }
+        catch (Exception exception) {
+            throw new RuntimeException();  // todo
+        }
 
 
-        return null;
+
     }
 
     /**
@@ -176,6 +190,24 @@ public class CassandraMetadataHandler extends MetadataHandler {
             String kind = row.getString("kind");
             int position = row.getInt("position");
 
+            /*
+             *  BIT(Types.MinorType.BIT),
+                DATEMILLI(Types.MinorType.DATEMILLI),
+                DATEDAY(Types.MinorType.DATEDAY),
+                TIMESTAMPMILLITZ(Types.MinorType.TIMESTAMPMILLITZ),
+                FLOAT8(Types.MinorType.FLOAT8),
+                FLOAT4(Types.MinorType.FLOAT4),
+                INT(Types.MinorType.INT),
+                TINYINT(Types.MinorType.TINYINT),
+                SMALLINT(Types.MinorType.SMALLINT),
+                BIGINT(Types.MinorType.BIGINT),
+                VARBINARY(Types.MinorType.VARBINARY),
+                DECIMAL(Types.MinorType.DECIMAL),
+                VARCHAR(Types.MinorType.VARCHAR),
+                STRUCT(Types.MinorType.STRUCT),
+                LIST(Types.MinorType.LIST);
+             */
+
             if (columnType != null && SupportedTypes.isSupported(columnType)) {
                 schemaBuilder.addField(FieldBuilder.newBuilder(columnName, columnType).build());
                 found = true;
@@ -197,7 +229,7 @@ public class CassandraMetadataHandler extends MetadataHandler {
         LOGGER.info("{}: Schema {}, table {}", getTableLayoutRequest.getQueryId(), getTableLayoutRequest.getTableName().getSchemaName(),
                 getTableLayoutRequest.getTableName().getTableName());
 
-        try (CqlSession cqlSession = this.cassandraSessionFactory.getSession()) {
+        try (CqlSession cqlSession = cassandraSessionFactory.getSession()) {
 
             //final String escape = connection.getMetaData().getSearchStringEscape();
 
@@ -279,6 +311,14 @@ public class CassandraMetadataHandler extends MetadataHandler {
         }
         */
         return new StaticCassandraCredentialProvider();
+    }
+
+    public Schema getPartitionSchema(final String catalogName)
+    {
+        SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder()
+                                                   .addField(BLOCK_PARTITION_SCHEMA_COLUMN_NAME, Types.MinorType.VARCHAR.getType())
+                                                   .addField(BLOCK_PARTITION_COLUMN_NAME, Types.MinorType.VARCHAR.getType());
+        return schemaBuilder.build();
     }
 
 }
