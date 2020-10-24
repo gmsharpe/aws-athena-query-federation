@@ -163,8 +163,8 @@ public class CassandraRecordHandlerNyTaxiIT {
             System.out.println("doReadRecordsNoSpill: Using encryptionKey[" + encryptionKey + "]");
 
             Map<String, ValueSet> constraintsMap = new HashMap<>();
-            constraintsMap.put("fare_amount", SortedRangeSet.copyOf(new ArrowType.Decimal(10,2),
-                    ImmutableList.of(Range.greaterThan(allocator, new ArrowType.Decimal(10,2), 40.0D)), false));
+            constraintsMap.put("fare_amount", SortedRangeSet.copyOf(new ArrowType.Decimal(10,6),
+                    ImmutableList.of(Range.greaterThan(allocator, new ArrowType.Decimal(10,6), 40.0D)), false));
 
             ReadRecordsRequest request = new ReadRecordsRequest(IdentityUtil.fakeIdentity(),
                     "catalog",

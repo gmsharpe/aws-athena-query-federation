@@ -95,15 +95,17 @@ public class CassandraRecordHandler
     // todo do I need a ThrottlingInvoker.ExceptionFilter?
 
     @Override
-    protected void readWithConstraint(BlockSpiller blockSpiller, ReadRecordsRequest readRecordsRequest,
+    protected void readWithConstraint(BlockSpiller blockSpiller,
+                                      ReadRecordsRequest readRecordsRequest,
                                       QueryStatusChecker queryStatusChecker) throws Exception
     {
-
-        logger.info("{}: Catalog: {}, table {}, splits {}", readRecordsRequest.getQueryId(),
-                    readRecordsRequest.getCatalogName(), readRecordsRequest.getTableName(),
+        logger.info("{}: Catalog: {}, table {}, splits {}",
+                    readRecordsRequest.getQueryId(),
+                    readRecordsRequest.getCatalogName(),
+                    readRecordsRequest.getTableName(),
                     readRecordsRequest.getSplit().getProperties());
-        try (CqlSession cassandraCqlSession = cassandraSessionFactory.getSession()) {
 
+        try (CqlSession cassandraCqlSession = cassandraSessionFactory.getSession()) {
             try {
                 Statement statement = buildSplitSql(cassandraCqlSession, readRecordsRequest.getCatalogName(),
                                                     readRecordsRequest.getTableName(),
@@ -117,6 +119,7 @@ public class CassandraRecordHandler
 
                 GeneratedRowWriter.RowWriterBuilder rowWriterBuilder = GeneratedRowWriter.newBuilder(
                         readRecordsRequest.getConstraints());
+
                 for (Field next : readRecordsRequest.getSchema().getFields()) {
                     // use first row in resultSet to make extractors
                     Extractor extractor = makeExtractor(next, resultSet.one(), partitionValues);
@@ -148,7 +151,6 @@ public class CassandraRecordHandler
      */
     private Extractor makeExtractor(Field field, Row row, Map<String, String> partitionValues)
     {
-
         // why get the MinorType?
         Types.MinorType fieldType = Types.getMinorTypeForArrowType(field.getType());
 
@@ -273,11 +275,20 @@ public class CassandraRecordHandler
         }
     }
 
-    public Statement buildSplitSql(CqlSession cqlSession, String catalogName, TableName tableName, Schema schema,
-                                   Constraints constraints, Split split)
+    public Statement buildSplitSql(CqlSession cqlSession,
+                                   String catalogName,
+                                   TableName tableName,
+                                   Schema schema,
+                                   Constraints constraints,
+                                   Split split)
     {
-        Statement statement = cassandraSplitQueryBuilder.buildSql(cqlSession, null, tableName.getSchemaName(),
-                                                                  tableName.getTableName(), schema, constraints, split);
+        Statement statement = cassandraSplitQueryBuilder.buildSql(cqlSession,
+                                                                  null,
+                                                                  tableName.getSchemaName(),
+                                                                  tableName.getTableName(),
+                                                                  schema,
+                                                                  constraints,
+                                                                  split);
         // todo - what should the pageSize be?
         statement.setPageSize(1000);
         return statement;

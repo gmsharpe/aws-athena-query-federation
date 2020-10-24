@@ -21,14 +21,14 @@ import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.commons.lang3.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.sql.SQLException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.stream.Collectors;
 
-public class CassandraMetadataHandler extends MetadataHandler {
+public class CassandraMetadataHandler extends MetadataHandler
+{
 
     public static final String BLOCK_PARTITION_SCHEMA_COLUMN_NAME = "partition_schema_name";
     public static final String BLOCK_PARTITION_COLUMN_NAME = "partition_name";
@@ -43,26 +43,30 @@ public class CassandraMetadataHandler extends MetadataHandler {
 
     private static final String SOURCE_TYPE = "cassandra";
 
-    protected CassandraMetadataHandler(final CassandraSessionConfig cassandraSessionConfig, final CassandraSessionFactory cassandraSessionFactory) {
+    protected CassandraMetadataHandler(final CassandraSessionConfig cassandraSessionConfig,
+                                       final CassandraSessionFactory cassandraSessionFactory)
+    {
         super(SOURCE_TYPE);
-        this.cassandraSessionFactory = Validate.notNull(cassandraSessionFactory, "cassandraSessionFactory must not be null");
-        this.cassandraSessionConfig = Validate.notNull(cassandraSessionConfig, "cassandraSessionConfig must not be null");
+        this.cassandraSessionFactory = Validate.notNull(cassandraSessionFactory,
+                                                        "cassandraSessionFactory must not be null");
+        this.cassandraSessionConfig = Validate.notNull(cassandraSessionConfig,
+                                                       "cassandraSessionConfig must not be null");
     }
-
 
     public CassandraMetadataHandler(EncryptionKeyFactory encryptionKeyFactory,
                                     AWSSecretsManager secretsManager,
                                     AmazonAthena athena,
                                     String spillBucket,
-                                    String spillPrefix) {
+                                    String spillPrefix)
+    {
         super(encryptionKeyFactory, secretsManager, athena, SOURCE_TYPE, spillBucket, spillPrefix);
 
         cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();
         cassandraSessionFactory = CassandraSessionFactory.getDefaultSessionFactory();
-
     }
 
-    public CassandraMetadataHandler() {
+    public CassandraMetadataHandler()
+    {
         super(SOURCE_TYPE);
         cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();
         cassandraSessionFactory = CassandraSessionFactory.getDefaultSessionFactory();
@@ -71,19 +75,26 @@ public class CassandraMetadataHandler extends MetadataHandler {
     public CassandraMetadataHandler(CassandraSessionConfig cassandraSessionConfig,
                                     CassandraSessionFactory cassandraSessionFactory,
                                     AWSSecretsManager secretsManager,
-                                    AmazonAthena athena) {
+                                    AmazonAthena athena)
+    {
 
         // todo can/should null values be passed here?
         super(null, secretsManager, athena, SOURCE_TYPE, null, null);
-        this.cassandraSessionFactory = Validate.notNull(cassandraSessionFactory, "cassandraSessionFactory must not be null");
-        this.cassandraSessionConfig = Validate.notNull(cassandraSessionConfig, "cassandraSessionConfig must not be null");
+        this.cassandraSessionFactory = Validate.notNull(cassandraSessionFactory,
+                                                        "cassandraSessionFactory must not be null");
+        this.cassandraSessionConfig = Validate.notNull(cassandraSessionConfig,
+                                                       "cassandraSessionConfig must not be null");
     }
 
     @Override
-    public ListSchemasResponse doListSchemaNames(BlockAllocator allocator, ListSchemasRequest request) throws Exception {
-
-
-        return null;
+    public ListSchemasResponse doListSchemaNames(BlockAllocator allocator, ListSchemasRequest request)
+    {
+        LOGGER.info("doListSchemaNames: enter", request.getCatalogName());
+        try (CqlSession cqlSession = cassandraSessionFactory.getSession()) {
+            ResultSet resultSet = cqlSession.execute("SELECT DISTINCT keyspace_name FROM system_schema.columns;");
+            List<String> keyspaces = resultSet.all().stream().map(row -> row.getString("keyspace_name")).collect(Collectors.toList());
+            return new ListSchemasResponse(request.getCatalogName(), keyspaces);
+        }
     }
 
     /**
@@ -93,127 +104,74 @@ public class CassandraMetadataHandler extends MetadataHandler {
      * @param allocator         Tool for creating and managing Apache Arrow Blocks.
      * @param listTablesRequest Provides details on who made the request and which Athena catalog and database they are querying.
      * @return
-     * @throws Exception
      */
     @Override
-    public ListTablesResponse doListTables(BlockAllocator allocator, ListTablesRequest listTablesRequest) throws Exception {
+    public ListTablesResponse doListTables(BlockAllocator allocator,
+                                           ListTablesRequest listTablesRequest)
+    {
 
-        CqlSession cqlSession = cassandraSessionFactory.getSession(getCredentialProvider());
-        LOGGER.info("{}: List table names for Catalog {}, Table {}", listTablesRequest.getQueryId(), listTablesRequest.getCatalogName(), listTablesRequest.getSchemaName());
-        return new ListTablesResponse(listTablesRequest.getCatalogName(), listTables(cqlSession, listTablesRequest.getSchemaName()));
+        try (CqlSession cqlSession = cassandraSessionFactory.getSession(getCredentialProvider())) {
+            LOGGER.info("{}: List table names for Catalog {}, Table {}", listTablesRequest.getQueryId(),
+                        listTablesRequest.getCatalogName(), listTablesRequest.getSchemaName());
+            return new ListTablesResponse(listTablesRequest.getCatalogName(),
+                                          listTables(cqlSession, listTablesRequest.getSchemaName()));
+        }
     }
 
-    private Collection<TableName> listTables(CqlSession cqlSession, String schemaName) {
+    private Collection<TableName> listTables(CqlSession cqlSession, String schemaName)
+    {
         ResultSet resultSet = cqlSession.execute("SELECT * FROM system_schema.tables");
 
         return Collections.unmodifiableCollection(
                 resultSet.all()
-                        .stream()
-                        .map(row -> new TableName(row.getString("keyspace_name"), row.getString("table_name")))
-                        .collect(Collectors.toList()));
-
+                         .stream()
+                         .map(row -> new TableName(row.getString("keyspace_name"), row.getString("table_name")))
+                         .collect(Collectors.toList()));
     }
 
-    /**
-     *
-     * references:
-     *  JdbcMetadataHandler
-     */
-
     @Override
-    public GetTableResponse doGetTable(BlockAllocator allocator, GetTableRequest request) throws Exception {
-
+    public GetTableResponse doGetTable(BlockAllocator allocator, GetTableRequest request)
+    {
         LOGGER.info("doGetTable: enter", request.getTableName());
-
         try (CqlSession cassandraCqlSession = cassandraSessionFactory.getSession()) {
-
-            Schema schema = getSchema(cassandraCqlSession,request.getTableName(),null);
-
+            Schema schema = getSchema(cassandraCqlSession, request.getTableName(), null);
             GetTableResponse getTableResponse = new GetTableResponse(null, request.getTableName(), schema, null);
-
             return getTableResponse;
-
         }
         catch (Exception exception) {
             throw new RuntimeException();  // todo
         }
-
-
-
     }
 
     /**
-     * <link>SupportedTypes<link/>:
-     * ---------------------------------------------------------
-     * BIT(Types.MinorType.BIT),
-     * DATEMILLI(Types.MinorType.DATEMILLI),
-     * DATEDAY(Types.MinorType.DATEDAY),
-     * TIMESTAMPMILLITZ(Types.MinorType.TIMESTAMPMILLITZ),
-     * FLOAT8(Types.MinorType.FLOAT8),
-     * FLOAT4(Types.MinorType.FLOAT4),
-     * INT(Types.MinorType.INT),
-     * TINYINT(Types.MinorType.TINYINT),
-     * SMALLINT(Types.MinorType.SMALLINT),
-     * BIGINT(Types.MinorType.BIGINT),
-     * VARBINARY(Types.MinorType.VARBINARY),
-     * DECIMAL(Types.MinorType.DECIMAL),
-     * VARCHAR(Types.MinorType.VARCHAR),
-     * STRUCT(Types.MinorType.STRUCT),
-     * LIST(Types.MinorType.LIST);
      *
      * @param cqlSession
      * @param tableName
      * @param partitionSchema
      * @return
      */
-
-    Schema getSchema(CqlSession cqlSession, TableName tableName, Schema partitionSchema) {
+    Schema getSchema(CqlSession cqlSession, TableName tableName, Schema partitionSchema)
+    {
         SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder();
         ResultSet resultSet = cqlSession.execute("SELECT * FROM system_schema.columns WHERE " +
-                "keyspace_name = '" + tableName.getSchemaName() + "' and table_name = '" + tableName.getTableName() + "';");
+                                                         "keyspace_name = '" + tableName.getSchemaName() + "' and table_name = '" + tableName.getTableName() + "';");
 
         //SELECT * FROM system_schema.columns WHERE keyspace_name = 'nytaxi' and table_name = 'fares' and kind in ('partition_key','clustering');"
 
         resultSet.all().stream().forEach(row -> {
-            // todo should I also retrieve 'column_name_bytes' from column schema
-            boolean found = false;
-            /*
-             *                   row.getString("type"),
-             *                     row.getInt("position"),
-             *                     row.getString("clustering_order")
-             */
             String cassandraType = row.getString("type");
-            // todo - ignoring the calendar for now.
-            ArrowType columnType = CassandraToArrowUtils.getArrowTypeForCassandraField(new CassandraFieldInfo(row.getString("type")), null);
+            ArrowType columnType = CassandraToArrowUtils.getArrowTypeForCassandraField(
+                    new CassandraFieldInfo(row.getString("type")), null);
             String columnName = row.getString("column_name");
             String clusteringOrder = row.getString("clustering_order");
             String kind = row.getString("kind");
             int position = row.getInt("position");
 
-            /*
-             *  BIT(Types.MinorType.BIT),
-                DATEMILLI(Types.MinorType.DATEMILLI),
-                DATEDAY(Types.MinorType.DATEDAY),
-                TIMESTAMPMILLITZ(Types.MinorType.TIMESTAMPMILLITZ),
-                FLOAT8(Types.MinorType.FLOAT8),
-                FLOAT4(Types.MinorType.FLOAT4),
-                INT(Types.MinorType.INT),
-                TINYINT(Types.MinorType.TINYINT),
-                SMALLINT(Types.MinorType.SMALLINT),
-                BIGINT(Types.MinorType.BIGINT),
-                VARBINARY(Types.MinorType.VARBINARY),
-                DECIMAL(Types.MinorType.DECIMAL),
-                VARCHAR(Types.MinorType.VARCHAR),
-                STRUCT(Types.MinorType.STRUCT),
-                LIST(Types.MinorType.LIST);
-             */
-
             if (columnType != null && SupportedTypes.isSupported(columnType)) {
                 schemaBuilder.addField(FieldBuilder.newBuilder(columnName, columnType).build());
-                found = true;
-
             } else {
-                LOGGER.error("getSchema: Unable to map type for column[" + columnName + "] to a supported type, attempted " + columnType);
+                LOGGER.error(
+                        "getSchema: Unable to map type for column[" + columnName + "] to a supported type, attempted " + columnType);
             }
         });
 
@@ -223,23 +181,28 @@ public class CassandraMetadataHandler extends MetadataHandler {
         return schemaBuilder.build();
     }
 
+    /**
+     * @param blockWriter Used to write rows (partitions) into the Apache Arrow response.
+     * @param getTableLayoutRequest
+     * @param queryStatusChecker A QueryStatusChecker that you can use to stop doing work for a query that has already terminated
+     */
     @Override
-    public void getPartitions(BlockWriter blockWriter, GetTableLayoutRequest getTableLayoutRequest, QueryStatusChecker queryStatusChecker) throws Exception {
+    public void getPartitions(BlockWriter blockWriter, GetTableLayoutRequest getTableLayoutRequest,
+                              QueryStatusChecker queryStatusChecker)
+    {
 
-        LOGGER.info("{}: Schema {}, table {}", getTableLayoutRequest.getQueryId(), getTableLayoutRequest.getTableName().getSchemaName(),
-                getTableLayoutRequest.getTableName().getTableName());
+        LOGGER.info("{}: Schema {}, table {}", getTableLayoutRequest.getQueryId(),
+                    getTableLayoutRequest.getTableName().getSchemaName(),
+                    getTableLayoutRequest.getTableName().getTableName());
 
         try (CqlSession cqlSession = cassandraSessionFactory.getSession()) {
-
-            //final String escape = connection.getMetaData().getSearchStringEscape();
-
             // get partition_keys
             ResultSet resultSet = cqlSession.execute("SELECT * FROM system_schema.columns WHERE keyspace_name = '"
-                    + getTableLayoutRequest.getTableName().getSchemaName()
-                    + "' and table_name = '"
-                    + getTableLayoutRequest.getTableName().getTableName() + "'" +
-                    "' and kind = 'partition_key'" +
-                    ";");
+                                                             + getTableLayoutRequest.getTableName().getSchemaName()
+                                                             + "' and table_name = '"
+                                                             + getTableLayoutRequest.getTableName().getTableName() + "'" +
+                                                             "' and kind = 'partition_key'" +
+                                                             ";");
 
             Iterator<Row> rows = resultSet.iterator();
 
@@ -267,14 +230,14 @@ public class CassandraMetadataHandler extends MetadataHandler {
                 while (rows.hasNext() && queryStatusChecker.isQueryRunning());
             }
 
-
             // get clustering_keys?
-            ResultSet clusteringKeysResultSet = cqlSession.execute("SELECT * FROM system_schema.columns WHERE keyspace_name = '"
-                    + getTableLayoutRequest.getTableName().getSchemaName()
-                    + "' and table_name = '"
-                    + getTableLayoutRequest.getTableName().getTableName() + "'" +
-                    "' and kind = 'partition_key'" +
-                    ";");
+            ResultSet clusteringKeysResultSet = cqlSession.execute(
+                    "SELECT * FROM system_schema.columns WHERE keyspace_name = '"
+                            + getTableLayoutRequest.getTableName().getSchemaName()
+                            + "' and table_name = '"
+                            + getTableLayoutRequest.getTableName().getTableName() + "'" +
+                            "' and kind = 'partition_key'" +
+                            ";");
 
             Iterator<Row> clusteringKeys = clusteringKeysResultSet.iterator();
 
@@ -282,8 +245,6 @@ public class CassandraMetadataHandler extends MetadataHandler {
             do {
                 final String partitionName = clusteringKeys.next().getString(PARTITION_COLUMN_NAME);
 
-                // 1. Returns all partitions of table, we are not supporting constraints push down to filter partitions.
-                // 2. This API is not paginated, we could use order by and limit clause with offsets here.
                 blockWriter.writeRows((Block block, int rowNum) -> {
                     block.setValue(BLOCK_PARTITION_COLUMN_NAME, rowNum, partitionName);
                     LOGGER.info("Adding partition {}", partitionName);
@@ -292,33 +253,28 @@ public class CassandraMetadataHandler extends MetadataHandler {
                 });
             }
             while (clusteringKeys.hasNext() && queryStatusChecker.isQueryRunning());
-
         }
     }
 
     @Override
-    public GetSplitsResponse doGetSplits(BlockAllocator allocator, GetSplitsRequest request) throws Exception {
+    public GetSplitsResponse doGetSplits(BlockAllocator allocator, GetSplitsRequest request) throws Exception
+    {
 
         return null;
-
     }
 
-    protected CassandraCredentialProvider getCredentialProvider() {
-        /*final String secretName = cassandraSessionConfig.getSecret();
-        if (StringUtils.isNotBlank(secretName)) {
-            LOGGER.info("Using Secrets Manager.");
-            return new RdsSecretsCredentialProvider(getSecret(secretName));
-        }
-        */
+    protected CassandraCredentialProvider getCredentialProvider()
+    {
         return new StaticCassandraCredentialProvider();
     }
 
     public Schema getPartitionSchema(final String catalogName)
     {
         SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder()
-                                                   .addField(BLOCK_PARTITION_SCHEMA_COLUMN_NAME, Types.MinorType.VARCHAR.getType())
-                                                   .addField(BLOCK_PARTITION_COLUMN_NAME, Types.MinorType.VARCHAR.getType());
+                                                   .addField(BLOCK_PARTITION_SCHEMA_COLUMN_NAME,
+                                                             Types.MinorType.VARCHAR.getType())
+                                                   .addField(BLOCK_PARTITION_COLUMN_NAME,
+                                                             Types.MinorType.VARCHAR.getType());
         return schemaBuilder.build();
     }
-
 }

@@ -34,7 +34,6 @@ import java.sql.SQLException;
 
 public class  CassandraMetadataHandlerTest {
 
-    //CqlSession cqlSession;
     private CassandraSessionConfig cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();
     private CassandraMetadataHandler cassandraMetadataHandler;
     private CassandraSessionFactory cassandraSessionFactory;
@@ -53,11 +52,15 @@ public class  CassandraMetadataHandlerTest {
         System.out.printf("Connected session: %s%n", cqlSession.getName());
 
         Mockito.when(this.cassandraSessionFactory.getSession(Mockito.any(CassandraCredentialProvider.class))).thenReturn(this.cqlSession);
-        this.secretsManager = Mockito.mock(AWSSecretsManager.class);
+        secretsManager = Mockito.mock(AWSSecretsManager.class);
 
-        Mockito.when(this.secretsManager.getSecretValue(Mockito.eq(new GetSecretValueRequest().withSecretId("testSecret")))).thenReturn(new GetSecretValueResult().withSecretString("{\"username\": \"testUser\", \"password\": \"testPassword\"}"));
-        this.cassandraMetadataHandler = new CassandraMetadataHandler(cassandraSessionConfig, this.cassandraSessionFactory, this.secretsManager, this.athena);
-        this.federatedIdentity = Mockito.mock(FederatedIdentity.class);
+        Mockito.when(secretsManager.getSecretValue(Mockito.eq(new GetSecretValueRequest().withSecretId("testSecret"))))
+               .thenReturn(new GetSecretValueResult().withSecretString("{\"username\": \"testUser\", \"password\": \"testPassword\"}"));
+        cassandraMetadataHandler = new CassandraMetadataHandler(cassandraSessionConfig,
+                                                                cassandraSessionFactory,
+                                                                secretsManager,
+                                                                athena);
+        federatedIdentity = Mockito.mock(FederatedIdentity.class);
 
 
         this.blockAllocator = Mockito.mock(BlockAllocator.class);
@@ -107,7 +110,8 @@ public class  CassandraMetadataHandlerTest {
     @Test
     public void doGetSchema() throws SQLException {
 
-        Schema schema = cassandraMetadataHandler.getSchema(cqlSession,new TableName("nytaxi","fares"), SchemaBuilder.newBuilder().build());
+        Schema schema = cassandraMetadataHandler
+                .getSchema(cqlSession,new TableName("nytaxi","fares"), SchemaBuilder.newBuilder().build());
 
         System.out.println(schema.toJson());
 

@@ -1,6 +1,9 @@
 package com.amazonaws.connectors.athena.cassandra;
 
 import com.datastax.oss.driver.api.core.type.DataType;
+import com.datastax.oss.driver.api.core.type.DataTypes;
+import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
+import com.datastax.oss.driver.shaded.guava.common.collect.ImmutableMap;
 import com.datastax.oss.protocol.internal.ProtocolConstants;
 import org.apache.arrow.util.Preconditions;
 import org.apache.arrow.vector.types.TimeUnit;
@@ -85,9 +88,6 @@ import static com.datastax.oss.driver.api.core.type.DataTypes.*;
  * TINYINT = new PrimitiveType(20);
  * DURATION = new PrimitiveType(21);
  */
-
-// todo - complex types
-
 public class CassandraToArrowUtils {
 
     public static Calendar getUtcCalendar() {
@@ -100,7 +100,11 @@ public class CassandraToArrowUtils {
         if (calendar != null) {
             timezone = calendar.getTimeZone().getID();
         } else {
-            timezone = null;
+            timezone = "UTC";
+        }
+
+        if (fieldInfo.getDataType().getProtocolCode() == TIMESTAMP.getProtocolCode()) {
+            return new ArrowType.Timestamp(TimeUnit.MILLISECOND, timezone);
         }
 
         ArrowType type = cassandraToArrowMap.getOrDefault(fieldInfo.getDataType().getProtocolCode(), () -> ArrowType.Null.INSTANCE).get();
@@ -110,31 +114,27 @@ public class CassandraToArrowUtils {
 
         }
 
-        if (fieldInfo.getDataType().getProtocolCode() == TIMESTAMP.getProtocolCode()) {
-            return new ArrowType.Timestamp(TimeUnit.MILLISECOND, timezone);
-        }
-
         return type;
     }
 
     /*
         currently supported ArrowTypes in Athena: SupportedTypes.isSupported(columnType)
 
-     *   BIT(Types.MinorType.BIT),
-     *   DATEMILLI(Types.MinorType.DATEMILLI),
-     *   DATEDAY(Types.MinorType.DATEDAY),
-     *   TIMESTAMPMILLITZ(Types.MinorType.TIMESTAMPMILLITZ),
-     *   FLOAT8(Types.MinorType.FLOAT8),
-     *   FLOAT4(Types.MinorType.FLOAT4),
-     *   INT(Types.MinorType.INT),
-     *   TINYINT(Types.MinorType.TINYINT),
-     *   SMALLINT(Types.MinorType.SMALLINT),
-     *   BIGINT(Types.MinorType.BIGINT),
-     **  VARBINARY(Types.MinorType.VARBINARY),
+     **   BIT(Types.MinorType.BIT),
+          DATEMILLI(Types.MinorType.DATEMILLI),
+     **   DATEDAY(Types.MinorType.DATEDAY),
+     **   TIMESTAMPMILLITZ(Types.MinorType.TIMESTAMPMILLITZ),
+     **   FLOAT8(Types.MinorType.FLOAT8),
+     **   FLOAT4(Types.MinorType.FLOAT4),
+     **   INT(Types.MinorType.INT),
+     **   TINYINT(Types.MinorType.TINYINT),
+     **   SMALLINT(Types.MinorType.SMALLINT),
+     **   BIGINT(Types.MinorType.BIGINT),
+     **   VARBINARY(Types.MinorType.VARBINARY),
      **   DECIMAL(Types.MinorType.DECIMAL),
-     *   VARCHAR(Types.MinorType.VARCHAR),
-     *   STRUCT(Types.MinorType.STRUCT),
-     *   LIST(Types.MinorType.LIST);
+     **   VARCHAR(Types.MinorType.VARCHAR),
+     **   STRUCT(Types.MinorType.STRUCT),
+     **   LIST(Types.MinorType.LIST);
     */
 
     public static final Map<Integer, Supplier<ArrowType>> cassandraToArrowMap = new HashMap<Integer, Supplier<ArrowType>>() {{
@@ -152,72 +152,48 @@ public class CassandraToArrowUtils {
         put(DOUBLE.getProtocolCode(), Types.MinorType.FLOAT8::getType);
         put(ProtocolConstants.DataType.VARINT, Types.MinorType.BIGINT::getType); // should this be INT instead?
         put(DATE.getProtocolCode(), Types.MinorType.DATEDAY::getType);
-        //put(TIME.getProtocolCode(), Types.MinorType.DATEMILLI::getType); // nanoseconds since midnight converted to milli.  maybe just convert to _int
-        put(TIMESTAMP.getProtocolCode(),Types.MinorType.TIMESTAMPMILLITZ::getType);
+        // nanoseconds since midnight converted to milli.  maybe just convert to _int
+        // not supported by AQF, at the moment
+
+        put(TIME.getProtocolCode(),() -> new ArrowType.Timestamp(TimeUnit.MILLISECOND, "UTC"));
+        // defaults to UTC, if none given prior
+        put(TIMESTAMP.getProtocolCode(),() -> new ArrowType.Timestamp(TimeUnit.MILLISECOND, "UTC")); // could use TIMESTAMPMILLITZ to get DATEMILLI
         put(TIMEUUID.getProtocolCode(), Types.MinorType.VARBINARY::getType); // v1 UUID
         put(UUID.getProtocolCode(), Types.MinorType.VARBINARY::getType); // standard UUID
-        put(DECIMAL.getProtocolCode(), Types.MinorType.DECIMAL::getType);
+        put(DECIMAL.getProtocolCode(),() -> new ArrowType.Decimal(0,0));
         put(ProtocolConstants.DataType.BLOB, Types.MinorType.VARBINARY::getType);
+        //put(DATE.getProtocolCode(), Types.MinorType.DATEMILLI::getType);
         put(ProtocolConstants.DataType.LIST, Types.MinorType.LIST::getType);
         put(ProtocolConstants.DataType.SET, Types.MinorType.LIST::getType);
         put(ProtocolConstants.DataType.MAP, Types.MinorType.STRUCT::getType);
-        //put(ProtocolConstants.DataType.TUPLE, Types.MinorType.STRUCT::getType);
+        put(ProtocolConstants.DataType.TUPLE, Types.MinorType.STRUCT::getType);
 
     }};
 
 
-    public static final DataType getCassandraDataType(String type) {
-        switch (type.toLowerCase()) {
-            case "text":
-                return TEXT;
-            case "boolean":
-                return BOOLEAN;
-            case "tinyint":
-                return TINYINT;
-            case "smallint":
-                return SMALLINT;
-            case "int":
-                return INT;
-            case "bigint":
-                return BIGINT;
-            case "float":
-                return FLOAT;
-            case "decimal":
-                return DECIMAL;
-            case "date":
-                return DATE;
-            case "timeuuid":
-                return TIMEUUID;
-            case "timestamp":
-                return TIMESTAMP;
-            case "uuid":
-                return UUID;
-            case "asci":
-                return ASCII;
-            case "blob":
-                return BLOB;
-            case "counter":
-                return COUNTER;
-            case "double":
-                return DOUBLE;
-            case "duration":
-                return DURATION;
-            case "inet":
-                return INET;
-            case "time":
-                return TIME;
-            case "varchar":
-                return null;
-            case "varint":
-                return VARINT;
-            case "list":
-                return null;
-            case "map":
-                return null;
-            case "set":
-                return null;
-            default:
-                return null;
-        }
-    }
+    public static final ImmutableMap<String, DataType> DATA_TYPES_BY_NAME =
+            new ImmutableMap.Builder<String, DataType>()
+                    .put("ascii", DataTypes.ASCII)
+                    .put("bigint", DataTypes.BIGINT)
+                    .put("blob", DataTypes.BLOB)
+                    .put("boolean", DataTypes.BOOLEAN)
+                    .put("counter", DataTypes.COUNTER)
+                    .put("decimal", DataTypes.DECIMAL)
+                    .put("double", DataTypes.DOUBLE)
+                    .put("float", DataTypes.FLOAT)
+                    .put("inet", DataTypes.INET)
+                    .put("int", DataTypes.INT)
+                    .put("text", DataTypes.TEXT)
+                    .put("varchar", DataTypes.TEXT)
+                    .put("timestamp", DataTypes.TIMESTAMP)
+                    .put("date", DataTypes.DATE)
+                    .put("time", DataTypes.TIME)
+                    .put("uuid", DataTypes.UUID)
+                    .put("varint", DataTypes.VARINT)
+                    .put("timeuuid", DataTypes.TIMEUUID)
+                    .put("tinyint", DataTypes.TINYINT)
+                    .put("smallint", DataTypes.SMALLINT)
+                    .put("duration", DataTypes.DURATION)
+                    .build();
+
 }

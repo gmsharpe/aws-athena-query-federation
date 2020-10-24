@@ -16,7 +16,7 @@ public class CassandraFieldInfo {
     private CqlIdentifier name;
 
     public CassandraFieldInfo(String dataType){
-        this.dataType = CassandraToArrowUtils.getCassandraDataType(dataType);
+        this.dataType = CassandraToArrowUtils.DATA_TYPES_BY_NAME.get(dataType);
     }
 
     public CassandraFieldInfo(DataType dataType) {
