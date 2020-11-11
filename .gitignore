@@ -4,4 +4,14 @@
 /target/
 */*.iml
 
+.classpath
+.factorypath
+.project
+*/.settings/
+*/.DS_Store
+.settings/org.eclipse.m2e.core.prefs
+.vscode/settings.json
+*/packaged.yaml
+.DS_Store
+
 application.conf
