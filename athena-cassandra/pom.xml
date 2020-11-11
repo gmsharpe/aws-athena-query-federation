@@ -12,6 +12,8 @@
         <cassandra.driver.version>4.7.2</cassandra.driver.version>
         <slf4jVersion>1.7.30</slf4jVersion>
         <log4j2Version>2.13.3</log4j2Version>
+        <aws-athena-federation-sdk.version>2020.35.1</aws-athena-federation-sdk.version>
+        <cdk.version>1.70.0</cdk.version>
     </properties>
 
     <artifactId>athena-cassandra</artifactId>
@@ -28,7 +30,6 @@
             <artifactId>netty-all</artifactId>
             <version>4.1.51.Final</version>
         </dependency>
-
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-athena-federation-sdk</artifactId>
@@ -95,6 +96,16 @@
             <artifactId>log4j-api</artifactId>
             <version>${log4j2Version}</version>
             <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awscdk</groupId>
+            <artifactId>core</artifactId>
+            <version>[1.19.0, 2)</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awscdk</groupId>
+            <artifactId>cassandra</artifactId>
+            <version>[1.19.0, 2)</version>
         </dependency>
     </dependencies>
 

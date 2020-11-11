@@ -1,3 +1,22 @@
+/*-
+ * #%L
+ * athena-cassandra
+ * %%
+ * Copyright (C) 2019 - 2020 Amazon Web Services
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
 package com.amazonaws.connectors.athena.cassandra.connection;
 
 import com.amazonaws.athena.connector.lambda.domain.Split;
@@ -19,6 +38,8 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.commons.lang3.Validate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,8 +49,13 @@ import java.util.stream.Collectors;
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.literal;
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.selectFrom;
 
+/**
+ * The type Cassandra split query builder.
+ */
 public class CassandraSplitQueryBuilder
 {
+
+    private static final Logger logger = LoggerFactory.getLogger(CassandraSplitQueryBuilder.class);
 
     /**
      * Common logic to build Split SQL including constraints translated in where clause.
@@ -73,7 +99,7 @@ public class CassandraSplitQueryBuilder
         Statement statement = select.where(clauses)
                                     .allowFiltering()
                                     .build();
-        System.out.println(((SimpleStatement) statement).getQuery());
+        logger.info(((SimpleStatement) statement).getQuery());
 
         return statement;
     }
@@ -102,8 +128,6 @@ public class CassandraSplitQueryBuilder
      * @param accumulator
      * @return
      */
-
-    // todo deconstruct and refactor (from JdbcSplitQueryBuilder)
     private List<Relation> toPredicate(String columnName,
                                        ValueSet valueSet,
                                        ArrowType type,
@@ -207,22 +231,38 @@ public class CassandraSplitQueryBuilder
         }
     }
 
-    private static class TypeAndValue
+    public static class TypeAndValue
     {
         private final ArrowType type;
         private final Object value;
 
-        TypeAndValue(ArrowType type, Object value)
+        /**
+         * Instantiates a new Type and value.
+         *
+         * @param type  the type
+         * @param value the value
+         */
+        public TypeAndValue(ArrowType type, Object value)
         {
             this.type = Validate.notNull(type, "type is null");
             this.value = Validate.notNull(value, "value is null");
         }
 
+        /**
+         * Gets type.
+         *
+         * @return the type
+         */
         ArrowType getType()
         {
             return type;
         }
 
+        /**
+         * Gets value.
+         *
+         * @return the value
+         */
         Object getValue()
         {
             return value;

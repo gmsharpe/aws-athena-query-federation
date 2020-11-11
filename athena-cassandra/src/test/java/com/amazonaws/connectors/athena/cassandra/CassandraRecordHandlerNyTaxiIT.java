@@ -1,3 +1,22 @@
+/*-
+ * #%L
+ * athena-cassandra
+ * %%
+ * Copyright (C) 2019 - 2020 Amazon Web Services
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
 package com.amazonaws.connectors.athena.cassandra;
 
 import com.amazonaws.athena.connector.lambda.data.BlockAllocatorImpl;
@@ -27,15 +46,12 @@ import com.amazonaws.services.secretsmanager.AWSSecretsManager;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
-import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,23 +67,24 @@ import static org.mockito.Mockito.when;
 
 /**
  * NY Taxi Fares
- *
+ * <p>
  * CREATE TABLE fares (
- *     id UUID PRIMARY KEY,
- *     medallion text,
- *     hack_license text,
- *     vendor_id varchar,
- *     pickup_datetime timestamp,
- *     payment_type varchar,
- *     fare_amount decimal,
- *     surcharge decimal,
- *     mta_tax decimal,
- *     tip_amount decimal,
- *     tolls_amount decimal,
- *     total_amount decimal );
+ * id UUID PRIMARY KEY,
+ * medallion text,
+ * hack_license text,
+ * vendor_id varchar,
+ * pickup_datetime timestamp,
+ * payment_type varchar,
+ * fare_amount decimal,
+ * surcharge decimal,
+ * mta_tax decimal,
+ * tip_amount decimal,
+ * tolls_amount decimal,
+ * total_amount decimal );
  */
 
-public class CassandraRecordHandlerNyTaxiIT {
+public class CassandraRecordHandlerNyTaxiIT
+{
 
     private static final Logger logger = LoggerFactory.getLogger(CassandraRecordHandlerNyTaxiIT.class);
 
@@ -75,9 +92,9 @@ public class CassandraRecordHandlerNyTaxiIT {
     private AWSSecretsManager awsSecretsManager;
     private AmazonAthena athena;
 
-    private EncryptionKeyFactory keyFactory = new LocalKeyFactory();
+    private final EncryptionKeyFactory keyFactory = new LocalKeyFactory();
 
-    private List<CassandraRecordHandlerNyTaxiIT.ByteHolder> mockS3Storage = new ArrayList<>();
+    private final List<CassandraRecordHandlerNyTaxiIT.ByteHolder> mockS3Storage = new ArrayList<>();
     private BlockAllocatorImpl allocator;
 
     private RecordService recordService;
@@ -85,98 +102,96 @@ public class CassandraRecordHandlerNyTaxiIT {
 
     private Schema schemaForRead;
 
-    private CqlSession cqlSession;
-
     @Before
-    public void setUp() {
+    public void setUp()
+    {
         System.out.println("setUpBefore - enter");
 
-        cqlSession = CqlSession.builder().build();
+        try (CqlSession cqlSession = CqlSession.builder().build()) {
 
-        schemaForRead = SchemaBuilder.newBuilder()
-                .addField("event_id",  Types.MinorType.VARBINARY.getType())
-                .addField("medallion", Types.MinorType.VARCHAR.getType())
-                .addField("hack_license", Types.MinorType.VARCHAR.getType())
-                .addField("vendor_id", Types.MinorType.VARCHAR.getType())
-               // .addField("pickup_datetime", Types.MinorType.DATEMILLI.getType())
-                .addField("payment_type", Types.MinorType.VARCHAR.getType())
-                .addField("fare_amount",  new ArrowType.Decimal(10, 2))
-                .addField("surcharge",  new ArrowType.Decimal(10, 2))
-                .addField("mta_tax",  new ArrowType.Decimal(10, 2))
-                .addField("tip_amount",  new ArrowType.Decimal(10, 2))
-                .addField("tolls_amount",  new ArrowType.Decimal(10, 2))
-                .addField("total_amount",  new ArrowType.Decimal(10, 2))
-                .addField("hack_license",  Types.MinorType.VARCHAR.getType())
-                .build();
+            schemaForRead = SchemaBuilder.newBuilder()
+                                         .addField("event_id", Types.MinorType.VARBINARY.getType())
+                                         .addField("medallion", Types.MinorType.VARCHAR.getType())
+                                         .addField("hack_license", Types.MinorType.VARCHAR.getType())
+                                         .addField("vendor_id", Types.MinorType.VARCHAR.getType())
+                                         // .addField("pickup_datetime", Types.MinorType.DATEMILLI.getType())
+                                         .addField("payment_type", Types.MinorType.VARCHAR.getType())
+                                         .addField("fare_amount", new ArrowType.Decimal(10, 2))
+                                         .addField("surcharge", new ArrowType.Decimal(10, 2))
+                                         .addField("mta_tax", new ArrowType.Decimal(10, 2))
+                                         .addField("tip_amount", new ArrowType.Decimal(10, 2))
+                                         .addField("tolls_amount", new ArrowType.Decimal(10, 2))
+                                         .addField("total_amount", new ArrowType.Decimal(10, 2))
+                                         .addField("hack_license", Types.MinorType.VARCHAR.getType())
+                                         .build();
 
-        allocator = new BlockAllocatorImpl();
+            allocator = new BlockAllocatorImpl();
 
-        amazonS3 = mock(AmazonS3.class);
-        awsSecretsManager = mock(AWSSecretsManager.class);
-        athena = mock(AmazonAthena.class);
+            amazonS3 = mock(AmazonS3.class);
+            awsSecretsManager = mock(AWSSecretsManager.class);
+            athena = mock(AmazonAthena.class);
 
-        when(amazonS3.putObject(anyObject(), anyObject(), anyObject(), anyObject()))
-                .thenAnswer(new Answer<Object>() {
-                    @Override
-                    public Object answer(InvocationOnMock invocationOnMock)
-                            throws Throwable {
+            when(amazonS3.putObject(anyObject(), anyObject(), anyObject(), anyObject()))
+                    .thenAnswer(invocationOnMock -> {
                         InputStream inputStream = (InputStream) invocationOnMock.getArguments()[2];
-                        CassandraRecordHandlerNyTaxiIT.ByteHolder byteHolder = new CassandraRecordHandlerNyTaxiIT.ByteHolder();
+                        ByteHolder byteHolder = new ByteHolder();
                         byteHolder.setBytes(ByteStreams.toByteArray(inputStream));
                         mockS3Storage.add(byteHolder);
                         return mock(PutObjectResult.class);
-                    }
-                });
+                    });
 
-        when(amazonS3.getObject(anyString(), anyString()))
-                .thenAnswer(new Answer<Object>() {
-                    @Override
-                    public Object answer(InvocationOnMock invocationOnMock)
-                            throws Throwable {
+            when(amazonS3.getObject(anyString(), anyString()))
+                    .thenAnswer(invocationOnMock -> {
                         S3Object mockObject = mock(S3Object.class);
-                        CassandraRecordHandlerNyTaxiIT.ByteHolder byteHolder = mockS3Storage.get(0);
+                        ByteHolder byteHolder = mockS3Storage.get(0);
                         mockS3Storage.remove(0);
                         when(mockObject.getObjectContent()).thenReturn(
                                 new S3ObjectInputStream(
                                         new ByteArrayInputStream(byteHolder.getBytes()), null));
                         return mockObject;
-                    }
-                });
+                    });
 
-        recordService = new CassandraRecordHandlerNyTaxiIT.LocalHandler(cqlSession, allocator, amazonS3, awsSecretsManager, athena);
-        spillReader = new S3BlockSpillReader(amazonS3, allocator);
+            recordService = new CassandraRecordHandlerNyTaxiIT.LocalHandler(cqlSession, allocator, amazonS3,
+                                                                            awsSecretsManager, athena);
+            spillReader = new S3BlockSpillReader(amazonS3, allocator);
 
-        System.out.println("setUpBefore - exit");
-
+            System.out.println("setUpBefore - exit");
+        }
     }
 
     @After
-    public void after() {
+    public void after()
+    {
         allocator.close();
     }
 
     @Test
-    public void doReadRecordsNoSpill() {
-        System.out.println("doReadRecordsNoSpill: enter");
+    public void doReadRecordsNoSpill()
+    {
+        logger.info("doReadRecordsNoSpill: enter");
         for (int i = 0; i < 2; i++) {
             EncryptionKey encryptionKey = (i % 2 == 0) ? keyFactory.create() : null;
-            System.out.println("doReadRecordsNoSpill: Using encryptionKey[" + encryptionKey + "]");
+            logger.info("doReadRecordsNoSpill: Using encryptionKey[" + encryptionKey + "]");
 
             Map<String, ValueSet> constraintsMap = new HashMap<>();
-            constraintsMap.put("fare_amount", SortedRangeSet.copyOf(new ArrowType.Decimal(10,6),
-                    ImmutableList.of(Range.greaterThan(allocator, new ArrowType.Decimal(10,6), 40.0D)), false));
+            constraintsMap.put("fare_amount", SortedRangeSet.copyOf(new ArrowType.Decimal(10, 6),
+                                                                    ImmutableList.of(Range.greaterThan(allocator,
+                                                                                                       new ArrowType.Decimal(
+                                                                                                               10, 6),
+                                                                                                       40.0D)), false));
 
             ReadRecordsRequest request = new ReadRecordsRequest(IdentityUtil.fakeIdentity(),
-                    "catalog",
-                    "queryId-" + System.currentTimeMillis(),
-                    new TableName("nytaxi", "fares"),
-                    schemaForRead,
-                    Split.newBuilder(makeSpillLocation(), encryptionKey).build(),
-                    new Constraints(constraintsMap),
-                    100_000_000_000L, //100GB don't expect this to spill
-                    100_000_000_000L
+                                                                "catalog",
+                                                                "queryId-" + System.currentTimeMillis(),
+                                                                new TableName("nytaxi", "fares"),
+                                                                schemaForRead,
+                                                                Split.newBuilder(makeSpillLocation(),
+                                                                                 encryptionKey).build(),
+                                                                new Constraints(constraintsMap),
+                                                                100_000_000_000L, //100GB don't expect this to spill
+                                                                100_000_000_000L
             );
-            ObjectMapperUtil2.assertSerialization(request);
+            //ObjectMapperUtil2.assertSerialization(request);
 
             RecordResponse rawResponse = recordService.readRecords(request);
             ObjectMapperUtil2.assertSerialization(rawResponse);
@@ -188,27 +203,29 @@ public class CassandraRecordHandlerNyTaxiIT {
 
             //assertTrue(response.getRecords().getRowCount() == 1);
             System.out.println("row count: " + response.getRecords().getRowCount());
-            System.out.println(String.format("doReadRecordsNoSpill: {%s}", BlockUtils.rowToString(response.getRecords(), 0)));
+            System.out.println(
+                    String.format("doReadRecordsNoSpill: {%s}", BlockUtils.rowToString(response.getRecords(), 0)));
         }
         System.out.println("doReadRecordsNoSpill: exit");
     }
 
-
     private static class LocalHandler
-            implements RecordService {
+            implements RecordService
+    {
         private CassandraRecordHandler handler;
         private final BlockAllocatorImpl allocator;
 
-        public LocalHandler(CqlSession cqlSession, BlockAllocatorImpl allocator, AmazonS3 amazonS3, AWSSecretsManager secretsManager, AmazonAthena athena) {
-
-
+        public LocalHandler(CqlSession cqlSession, BlockAllocatorImpl allocator, AmazonS3 amazonS3,
+                            AWSSecretsManager secretsManager, AmazonAthena athena)
+        {
             handler = new CassandraRecordHandler(cqlSession, amazonS3, secretsManager, athena);
             //handler.setNumRows(20_000);//lower number for faster unit tests vs integ tests
             this.allocator = allocator;
         }
 
         @Override
-        public RecordResponse readRecords(RecordRequest request) {
+        public RecordResponse readRecords(RecordRequest request)
+        {
 
             try {
                 switch (request.getRequestType()) {
@@ -219,31 +236,36 @@ public class CassandraRecordHandlerNyTaxiIT {
                     default:
                         throw new RuntimeException("Unknown request type " + request.getRequestType());
                 }
-            } catch (Exception ex) {
+            }
+            catch (Exception ex) {
                 throw new RuntimeException(ex);
             }
         }
     }
 
-
-    private SpillLocation makeSpillLocation() {
+    private SpillLocation makeSpillLocation()
+    {
         return S3SpillLocation.newBuilder()
-                .withBucket("aqf-cassandra-connector-gmsharpe-test")
-                .withPrefix("lambda-spill")
-                .withQueryId(UUID.randomUUID().toString())
-                .withSplitId(UUID.randomUUID().toString())
-                .withIsDirectory(true)
-                .build();
+                              .withBucket("aqf-cassandra-connector-gmsharpe-test")
+                              .withPrefix("lambda-spill")
+                              .withQueryId(UUID.randomUUID().toString())
+                              .withSplitId(UUID.randomUUID().toString())
+                              .withIsDirectory(true)
+                              .build();
     }
 
-    private class ByteHolder {
+    private class ByteHolder
+    {
         private byte[] bytes;
-        public void setBytes(byte[] bytes) {
+
+        public void setBytes(byte[] bytes)
+        {
             this.bytes = bytes;
         }
-        public byte[] getBytes() {
+
+        public byte[] getBytes()
+        {
             return bytes;
         }
     }
-
 }

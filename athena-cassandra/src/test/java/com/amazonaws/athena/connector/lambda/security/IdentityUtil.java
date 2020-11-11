@@ -20,7 +20,8 @@ package com.amazonaws.athena.connector.lambda.security;
  * #L%
  */
 
-import com.amazonaws.athena.connector.lambda.security.FederatedIdentity;
+import java.util.Collections;
+import java.util.HashMap;
 
 public class IdentityUtil
 {
@@ -28,6 +29,6 @@ public class IdentityUtil
 
     public static FederatedIdentity fakeIdentity()
     {
-        return new FederatedIdentity("access_key_id", "principle", "account");
+        return new FederatedIdentity("arn", "account", new HashMap<String, String>(), Collections.emptyList());
     }
 }
