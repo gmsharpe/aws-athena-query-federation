@@ -3,7 +3,7 @@
 .idea/
 /target/
 *.iml
-application.conf
+*/*.iml
 
 .classpath
 .factorypath
@@ -15,3 +15,5 @@ application.conf
 */packaged.yaml
 .DS_Store
 
+
+application.conf

@@ -55,9 +55,10 @@
         <module>athena-jdbc</module>
         <module>athena-federation-sdk-tools</module>
         <module>athena-udfs</module>
+        <module>athena-cassandra</module>
         <module>athena-timestream</module>
         <module>athena-neptune</module>
-        <module>athena-cassandra</module>
+
     </modules>
 
     <dependencies>
