@@ -1,46 +1,40 @@
-/*-
- * #%L
- * athena-cassandra
- * %%
- * Copyright (C) 2019 - 2020 Amazon Web Services
- * %%
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- *      http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- * #L%
- */
 package com.amazonaws.connectors.athena.cassandra.connection;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.auth.AuthProvider;
 
-public class CassandraSessionFactory {
+import java.util.function.Supplier;
 
-    private final CassandraSessionConfig cassandraSessionConfig;
+public interface CassandraSessionFactory
+{
 
-    public CassandraSessionFactory(final CassandraSessionConfig cassandraSessionConfig){
-        this.cassandraSessionConfig = cassandraSessionConfig;
-    }
+    CqlSession getSession(Supplier<AuthProvider> authProvider);
 
-    public CqlSession getSession() {
+    /**
+     * connect to Cassandra on 'localhost' with no authentication on default port
+     */
+    default CqlSession getSession()
+    {
         return CqlSession.builder().build();
     }
 
-    public static CassandraSessionFactory getDefaultSessionFactory() {
-        return new CassandraSessionFactory(CassandraSessionConfig.getDefaultSessionConfig());
+    enum Type {
+
+        AWS_KEYSPACES("aws_keyspaces"),
+        DEFAULT("default"),
+        LOCALHOST("localhost");
+
+        private final String type;
+
+        Type(final String type)
+        {
+            this.type = type;
+        }
+
+        public String getType()
+        {
+            return type;
+        }
+
     }
-
-    public CqlSession getSession(CassandraCredentialProvider cassandraCredentialProvider){
-
-        return CqlSession.builder().build();
-
-    }
-
 }

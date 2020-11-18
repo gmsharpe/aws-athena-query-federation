@@ -25,10 +25,8 @@ import com.amazonaws.athena.connector.lambda.domain.TableName;
 import com.amazonaws.athena.connector.lambda.handlers.MetadataHandler;
 import com.amazonaws.athena.connector.lambda.metadata.*;
 import com.amazonaws.athena.connector.lambda.security.EncryptionKeyFactory;
-import com.amazonaws.connectors.athena.cassandra.connection.CassandraCredentialProvider;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionConfig;
-import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionFactory;
-import com.amazonaws.connectors.athena.cassandra.connection.StaticCassandraCredentialProvider;
+import com.amazonaws.connectors.athena.cassandra.connection.DefaultCassandraSessionFactory;
 import com.amazonaws.services.athena.AmazonAthena;
 import com.amazonaws.services.secretsmanager.AWSSecretsManager;
 import com.datastax.oss.driver.api.core.CqlSession;
@@ -40,6 +38,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.commons.lang3.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -55,7 +54,7 @@ public class CassandraMetadataHandler extends MetadataHandler
     static final String PARTITION_COLUMN_NAME = "partition_name";
 
     public static final String ALL_PARTITIONS = "*";
-    private final CassandraSessionFactory cassandraSessionFactory;
+    private final DefaultCassandraSessionFactory cassandraSessionFactory;
     private final CassandraSessionConfig cassandraSessionConfig;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CassandraMetadataHandler.class);
@@ -63,7 +62,7 @@ public class CassandraMetadataHandler extends MetadataHandler
     private static final String SOURCE_TYPE = "cassandra";
 
     protected CassandraMetadataHandler(final CassandraSessionConfig cassandraSessionConfig,
-                                       final CassandraSessionFactory cassandraSessionFactory)
+                                       final DefaultCassandraSessionFactory cassandraSessionFactory)
     {
         super(SOURCE_TYPE);
         this.cassandraSessionFactory = Validate.notNull(cassandraSessionFactory,
@@ -81,22 +80,21 @@ public class CassandraMetadataHandler extends MetadataHandler
         super(encryptionKeyFactory, secretsManager, athena, SOURCE_TYPE, spillBucket, spillPrefix);
 
         cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();
-        cassandraSessionFactory = CassandraSessionFactory.getDefaultSessionFactory();
+        cassandraSessionFactory = DefaultCassandraSessionFactory.getDefaultSessionFactory();
     }
 
     public CassandraMetadataHandler()
     {
         super(SOURCE_TYPE);
         cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();
-        cassandraSessionFactory = CassandraSessionFactory.getDefaultSessionFactory();
+        cassandraSessionFactory = DefaultCassandraSessionFactory.getDefaultSessionFactory();
     }
 
     public CassandraMetadataHandler(CassandraSessionConfig cassandraSessionConfig,
-                                    CassandraSessionFactory cassandraSessionFactory,
+                                    DefaultCassandraSessionFactory cassandraSessionFactory,
                                     AWSSecretsManager secretsManager,
                                     AmazonAthena athena)
     {
-
         // todo can/should null values be passed here?
         super(null, secretsManager, athena, SOURCE_TYPE, null, null);
         this.cassandraSessionFactory = Validate.notNull(cassandraSessionFactory,
@@ -129,7 +127,7 @@ public class CassandraMetadataHandler extends MetadataHandler
                                            ListTablesRequest listTablesRequest)
     {
 
-        try (CqlSession cqlSession = cassandraSessionFactory.getSession(getCredentialProvider())) {
+        try (CqlSession cqlSession = cassandraSessionFactory.getSession(cassandraSessionConfig.getAuthProvider())) {
             LOGGER.info("{}: List table names for Catalog {}, Table {}", listTablesRequest.getQueryId(),
                         listTablesRequest.getCatalogName(), listTablesRequest.getSchemaName());
             return new ListTablesResponse(listTablesRequest.getCatalogName(),
@@ -278,13 +276,7 @@ public class CassandraMetadataHandler extends MetadataHandler
     @Override
     public GetSplitsResponse doGetSplits(BlockAllocator allocator, GetSplitsRequest request) throws Exception
     {
-
         return null;
-    }
-
-    protected CassandraCredentialProvider getCredentialProvider()
-    {
-        return new StaticCassandraCredentialProvider();
     }
 
     public Schema getPartitionSchema(final String catalogName)

@@ -25,27 +25,32 @@ import com.amazonaws.athena.connector.lambda.domain.TableName;
 import com.amazonaws.athena.connector.lambda.metadata.ListTablesRequest;
 import com.amazonaws.athena.connector.lambda.metadata.ListTablesResponse;
 import com.amazonaws.athena.connector.lambda.security.FederatedIdentity;
-import com.amazonaws.connectors.athena.cassandra.connection.CassandraCredentialProvider;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.connectors.athena.cassandra.connection.CassandraAuthProvider;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionConfig;
-import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionFactory;
+import com.amazonaws.connectors.athena.cassandra.connection.DefaultCassandraSessionFactory;
 import com.amazonaws.services.athena.AmazonAthena;
 import com.amazonaws.services.secretsmanager.AWSSecretsManager;
 import com.amazonaws.services.secretsmanager.model.GetSecretValueRequest;
 import com.amazonaws.services.secretsmanager.model.GetSecretValueResult;
 import com.datastax.oss.driver.api.core.CqlSession;
 
-import com.datastax.oss.driver.api.core.CqlSessionBuilder;
+import com.datastax.oss.driver.api.core.auth.AuthProvider;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
-import com.datastax.oss.driver.api.core.cql.SyncCqlSession;
-import com.datastax.oss.driver.api.core.session.Session;
+import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
+import software.aws.mcs.auth.SigV4AuthProvider;
 
 import java.net.InetSocketAddress;
 import java.sql.SQLException;
-
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * From <code>JdbcMetadataHandlerTest</code>
@@ -55,7 +60,7 @@ public class  CassandraMetadataHandlerTest {
 
     private CassandraSessionConfig cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();
     private CassandraMetadataHandler cassandraMetadataHandler;
-    private CassandraSessionFactory cassandraSessionFactory;
+    private DefaultCassandraSessionFactory cassandraSessionFactory;
     private CqlSession cqlSession;
     private FederatedIdentity federatedIdentity;
     private AWSSecretsManager secretsManager;
@@ -65,12 +70,12 @@ public class  CassandraMetadataHandlerTest {
     @Before
     public void setup()
     {
-        this.cassandraSessionFactory = Mockito.mock(CassandraSessionFactory.class);
+        this.cassandraSessionFactory = Mockito.mock(DefaultCassandraSessionFactory.class);
         //this.session = Mockito.mock(CqlSession.class, Mockito.RETURNS_DEEP_STUBS);
         this.cqlSession = CqlSession.builder().build();//.addContactPoint(InetSocketAddress.createUnresolved("127.0.0.1",9042)).build();
         System.out.printf("Connected session: %s%n", cqlSession.getName());
 
-        Mockito.when(this.cassandraSessionFactory.getSession(Mockito.any(CassandraCredentialProvider.class))).thenReturn(this.cqlSession);
+        Mockito.when(this.cassandraSessionFactory.getSession(Mockito.any(Supplier.class))).thenReturn(this.cqlSession);
         secretsManager = Mockito.mock(AWSSecretsManager.class);
 
         Mockito.when(secretsManager.getSecretValue(Mockito.eq(new GetSecretValueRequest().withSecretId("testSecret"))))
@@ -135,5 +140,34 @@ public class  CassandraMetadataHandlerTest {
         System.out.println(schema.toJson());
 
     }
+
+    @Test
+    public void doGetSchemaFromKeyspaces(){
+        Map<String,String> env = System.getenv();
+        SigV4AuthProvider provider = new SigV4AuthProvider(
+                new AWSStaticCredentialsProvider(
+                        new BasicAWSCredentials(env.get("AWS_ACCESS_KEY_ID"), env.get("AWS_SECRET_ACCESS_KEY"))), "us-west-1");
+        List<InetSocketAddress> contactPoints = Collections.singletonList(
+                new InetSocketAddress("cassandra.us-west-1.amazonaws.com",
+                                      9142));
+
+        String keyspace = "elections"; //"redfin";
+        String tableName = "presidential_election_2016";
+
+
+        try (CqlSession cqlSession = CqlSession.builder()
+                                               //.withConfigLoader(loader)
+                                               .addContactPoints(contactPoints)
+                                               .withAuthProvider(provider)
+                                               .withLocalDatacenter("us-west-1")
+                                               .withKeyspace(keyspace)
+                                               .build()){
+            Schema schema = cassandraMetadataHandler
+                    .getSchema(cqlSession,new TableName(keyspace,tableName), SchemaBuilder.newBuilder().build());
+            System.out.println(schema);
+
+        }
+    }
+
 
 }

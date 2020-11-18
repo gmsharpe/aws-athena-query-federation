@@ -32,7 +32,7 @@ import com.amazonaws.athena.connector.lambda.domain.predicate.Constraints;
 import com.amazonaws.athena.connector.lambda.handlers.RecordHandler;
 import com.amazonaws.athena.connector.lambda.records.ReadRecordsRequest;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionConfig;
-import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionFactory;
+import com.amazonaws.connectors.athena.cassandra.connection.DefaultCassandraSessionFactory;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSplitQueryBuilder;
 import com.amazonaws.services.athena.AmazonAthena;
 import com.amazonaws.services.s3.AmazonS3;
@@ -62,7 +62,7 @@ public class CassandraRecordHandler
     private static final String sourceType = "cassandra";
 
     //private final CqlSessionCredentialProvider cqlSessionCredentialProvider;
-    private final CassandraSessionFactory cassandraSessionFactory;
+    private final DefaultCassandraSessionFactory cassandraSessionFactory;
     private final CassandraSessionConfig cassandraSessionConfig;
 
     private final CassandraSplitQueryBuilder cassandraSplitQueryBuilder;
@@ -75,7 +75,7 @@ public class CassandraRecordHandler
         /** todo: how to input connection config?
          * Initiates a connection to the session specified by the application.conf.
          */
-        cassandraSessionFactory = CassandraSessionFactory.getDefaultSessionFactory();
+        cassandraSessionFactory = DefaultCassandraSessionFactory.getDefaultSessionFactory();
         cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();
         cassandraSplitQueryBuilder = new CassandraSplitQueryBuilder();
     }
@@ -86,7 +86,7 @@ public class CassandraRecordHandler
                                   final AWSSecretsManager secretsManager,
                                   final AmazonAthena athena,
                                   final String sourceType,
-                                  final CassandraSessionFactory cassandraSessionFactory,
+                                  final DefaultCassandraSessionFactory cassandraSessionFactory,
                                   final CassandraSessionConfig cassandraSessionConfig)
     {
 
@@ -107,7 +107,7 @@ public class CassandraRecordHandler
              secretsManager,
              athena,
              sourceType,
-             CassandraSessionFactory.getDefaultSessionFactory(),
+             DefaultCassandraSessionFactory.getDefaultSessionFactory(),
              CassandraSessionConfig.getDefaultSessionConfig());
     }
 

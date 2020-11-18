@@ -19,10 +19,18 @@
  */
 package com.amazonaws.connectors.athena.cassandra.connection;
 
-public class StaticCassandraCredentialProvider implements CassandraCredentialProvider {
+public class StaticCassandraCredentialProvider implements CassandraAuthProvider
+{
+
+    private final CassandraCredentials cassandraCredentials;
+
+    public StaticCassandraCredentialProvider(CassandraCredentials cassandraCredentials){
+        this.cassandraCredentials = cassandraCredentials;
+    }
 
     @Override
     public CassandraCredentials getCredential() {
-        return null;
+        return cassandraCredentials;
     }
+
 }

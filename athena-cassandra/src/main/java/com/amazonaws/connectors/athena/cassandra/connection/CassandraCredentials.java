@@ -19,5 +19,55 @@
  */
 package com.amazonaws.connectors.athena.cassandra.connection;
 
+import org.apache.commons.lang3.Validate;
+
+import java.util.Objects;
+
 public class CassandraCredentials {
+
+    private final String user;
+    private final String password;
+
+    /**
+     * @param user Database user name.
+     * @param password Database password.
+     */
+    public CassandraCredentials(String user, String password)
+    {
+        this.user = Validate.notBlank(user, "User must not be blank");
+        this.password = Validate.notBlank(password, "Password must not be blank");
+    }
+
+    public String getUser()
+    {
+        return user;
+    }
+
+    public String getPassword()
+    {
+        return password;
+    }
+
+    @Override
+    public boolean equals(Object o)
+    {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        CassandraCredentials that = (CassandraCredentials) o;
+        return Objects.equals(getUser(), that.getUser()) &&
+                Objects.equals(getPassword(), that.getPassword());
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(getUser(), getPassword());
+    }
+
+    public static CassandraCredentials BLANK = new CassandraCredentials("","");
+
 }
