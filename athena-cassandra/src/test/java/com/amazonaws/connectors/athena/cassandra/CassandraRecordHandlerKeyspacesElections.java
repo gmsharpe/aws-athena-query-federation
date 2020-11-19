@@ -19,10 +19,7 @@
  */
 package com.amazonaws.connectors.athena.cassandra;
 
-import com.amazonaws.athena.connector.lambda.data.BlockAllocatorImpl;
-import com.amazonaws.athena.connector.lambda.data.BlockUtils;
-import com.amazonaws.athena.connector.lambda.data.S3BlockSpillReader;
-import com.amazonaws.athena.connector.lambda.data.SchemaBuilder;
+import com.amazonaws.athena.connector.lambda.data.*;
 import com.amazonaws.athena.connector.lambda.domain.Split;
 import com.amazonaws.athena.connector.lambda.domain.TableName;
 import com.amazonaws.athena.connector.lambda.domain.predicate.Constraints;
@@ -32,22 +29,22 @@ import com.amazonaws.athena.connector.lambda.domain.predicate.ValueSet;
 import com.amazonaws.athena.connector.lambda.domain.spill.S3SpillLocation;
 import com.amazonaws.athena.connector.lambda.domain.spill.SpillLocation;
 import com.amazonaws.athena.connector.lambda.records.*;
-import com.amazonaws.athena.connector.lambda.security.EncryptionKey;
-import com.amazonaws.athena.connector.lambda.security.EncryptionKeyFactory;
-import com.amazonaws.athena.connector.lambda.security.IdentityUtil;
-import com.amazonaws.athena.connector.lambda.security.LocalKeyFactory;
+import com.amazonaws.athena.connector.lambda.security.*;
 import com.amazonaws.athena.connector.lambda.serde.ObjectMapperUtil2;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.connectors.athena.cassandra.connection.KeyspacesSessionConfig;
+import com.amazonaws.connectors.athena.cassandra.connection.*;
 import com.amazonaws.services.athena.AmazonAthena;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 import com.amazonaws.services.secretsmanager.AWSSecretsManager;
+import com.amazonaws.services.secretsmanager.model.GetSecretValueRequest;
+import com.amazonaws.services.secretsmanager.model.GetSecretValueResult;
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
 import org.apache.arrow.vector.types.Types;
@@ -56,13 +53,16 @@ import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.aws.mcs.auth.SigV4AuthProvider;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.function.Supplier;
 
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyObject;
@@ -70,28 +70,11 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-/**
- * NY Taxi Fares
- * <p>
- * CREATE TABLE fares (
- * id UUID PRIMARY KEY,
- * medallion text,
- * hack_license text,
- * vendor_id varchar,
- * pickup_datetime timestamp,
- * payment_type varchar,
- * fare_amount decimal,
- * surcharge decimal,
- * mta_tax decimal,
- * tip_amount decimal,
- * tolls_amount decimal,
- * total_amount decimal );
- */
 
-public class CassandraRecordHandlerNyTaxiIT
+public class CassandraRecordHandlerKeyspacesElections
 {
 
-    private static final Logger logger = LoggerFactory.getLogger(CassandraRecordHandlerNyTaxiIT.class);
+    private static final Logger logger = LoggerFactory.getLogger(CassandraRecordHandlerKeyspacesElections.class);
 
     private AmazonS3 amazonS3;
     private AWSSecretsManager awsSecretsManager;
@@ -99,7 +82,13 @@ public class CassandraRecordHandlerNyTaxiIT
 
     private final EncryptionKeyFactory keyFactory = new LocalKeyFactory();
 
-    private final List<CassandraRecordHandlerNyTaxiIT.ByteHolder> mockS3Storage = new ArrayList<>();
+    private CassandraSessionConfig cassandraSessionConfig;
+    private CassandraMetadataHandler cassandraMetadataHandler;
+    private CassandraSessionFactory cassandraSessionFactory;
+    private FederatedIdentity federatedIdentity;
+    private AWSSecretsManager secretsManager;
+
+    private final List<CassandraRecordHandlerKeyspacesElections.ByteHolder> mockS3Storage = new ArrayList<>();
     private BlockAllocatorImpl allocator;
 
     private RecordService recordService;
@@ -107,28 +96,53 @@ public class CassandraRecordHandlerNyTaxiIT
 
     private Schema schemaForRead;
 
+    Map<String,String> env = System.getenv();
+    SigV4AuthProvider provider = new SigV4AuthProvider(
+            new AWSStaticCredentialsProvider(
+                    new BasicAWSCredentials(env.get("AWS_ACCESS_KEY_ID"), env.get("AWS_SECRET_ACCESS_KEY"))), "us-west-1");
+    List<InetSocketAddress> contactPoints = Collections.singletonList(
+            new InetSocketAddress("cassandra.us-west-1.amazonaws.com",
+                                  9142));
+
+    String keyspace = "elections"; //"redfin";
+    String tableName = "presidential_election_2016";
+
+
     @Before
     public void setUp()
     {
-        System.out.println("setUpBefore - enter");
 
-        try (CqlSession cqlSession = CqlSession.builder().build()) {
+        Map<String,String> env = System.getenv();
+        AWSCredentials credentials = new BasicAWSCredentials(env.get("AWS_ACCESS_KEY_ID"), env.get("AWS_SECRET_ACCESS_KEY"));
+        cassandraSessionConfig = new KeyspacesSessionConfig(credentials,"us-west-1");
 
-            schemaForRead = SchemaBuilder.newBuilder()
-                                         .addField("event_id", Types.MinorType.VARBINARY.getType())
-                                         .addField("medallion", Types.MinorType.VARCHAR.getType())
-                                         .addField("hack_license", Types.MinorType.VARCHAR.getType())
-                                         .addField("vendor_id", Types.MinorType.VARCHAR.getType())
-                                         // .addField("pickup_datetime", Types.MinorType.DATEMILLI.getType())
-                                         .addField("payment_type", Types.MinorType.VARCHAR.getType())
-                                         .addField("fare_amount", new ArrowType.Decimal(10, 2))
-                                         .addField("surcharge", new ArrowType.Decimal(10, 2))
-                                         .addField("mta_tax", new ArrowType.Decimal(10, 2))
-                                         .addField("tip_amount", new ArrowType.Decimal(10, 2))
-                                         .addField("tolls_amount", new ArrowType.Decimal(10, 2))
-                                         .addField("total_amount", new ArrowType.Decimal(10, 2))
-                                         .addField("hack_license", Types.MinorType.VARCHAR.getType())
-                                         .build();
+        cassandraSessionFactory = CassandraSessionFactory.getConnectionFactory(cassandraSessionConfig);
+
+        secretsManager = Mockito.mock(AWSSecretsManager.class);
+
+        Mockito.when(secretsManager.getSecretValue(Mockito.eq(new GetSecretValueRequest().withSecretId("testSecret"))))
+               .thenReturn(new GetSecretValueResult().withSecretString("{\"username\": \"testUser\", \"password\": \"testPassword\"}"));
+        cassandraMetadataHandler = new CassandraMetadataHandler(cassandraSessionConfig,
+                                                                cassandraSessionFactory,
+                                                                secretsManager,
+                                                                athena);
+        federatedIdentity = Mockito.mock(FederatedIdentity.class);
+
+
+        allocator = Mockito.mock(BlockAllocatorImpl.class);
+
+
+
+        DriverConfigLoader loader = DriverConfigLoader.fromClasspath("application.conf");
+        try (CqlSession cqlSession = CqlSession.builder()
+                                               .withConfigLoader(loader)
+                                               .addContactPoints(contactPoints)
+                                               .withAuthProvider(provider)
+                                               .withLocalDatacenter("us-west-1")
+                                               .withKeyspace(keyspace)
+                                               .build()) {
+            schemaForRead = cassandraMetadataHandler
+                    .getSchema(cqlSession, new TableName(keyspace, tableName), SchemaBuilder.newBuilder().build());
 
             allocator = new BlockAllocatorImpl();
 
@@ -156,11 +170,10 @@ public class CassandraRecordHandlerNyTaxiIT
                         return mockObject;
                     });
 
-            recordService = new CassandraRecordHandlerNyTaxiIT.LocalHandler(cqlSession, allocator, amazonS3,
-                                                                            awsSecretsManager, athena);
+            recordService = new CassandraRecordHandlerKeyspacesElections.LocalHandler(cqlSession, allocator, amazonS3,
+                                                                                      awsSecretsManager, athena);
             spillReader = new S3BlockSpillReader(amazonS3, allocator);
 
-            System.out.println("setUpBefore - exit");
         }
     }
 
@@ -179,16 +192,16 @@ public class CassandraRecordHandlerNyTaxiIT
             logger.info("doReadRecordsNoSpill: Using encryptionKey[" + encryptionKey + "]");
 
             Map<String, ValueSet> constraintsMap = new HashMap<>();
-            constraintsMap.put("fare_amount", SortedRangeSet.copyOf(new ArrowType.Decimal(10, 6),
+          /*  constraintsMap.put("fare_amount", SortedRangeSet.copyOf(new ArrowType.Decimal(10, 6),
                                                                     ImmutableList.of(Range.greaterThan(allocator,
                                                                                                        new ArrowType.Decimal(
                                                                                                                10, 6),
                                                                                                        40.0D)), false));
-
+*/
             ReadRecordsRequest request = new ReadRecordsRequest(IdentityUtil.fakeIdentity(),
                                                                 "catalog",
                                                                 "queryId-" + System.currentTimeMillis(),
-                                                                new TableName("nytaxi", "fares"),
+                                                                new TableName(keyspace, tableName),
                                                                 schemaForRead,
                                                                 Split.newBuilder(makeSpillLocation(),
                                                                                  encryptionKey).build(),
@@ -231,7 +244,7 @@ public class CassandraRecordHandlerNyTaxiIT
                                                  secretsManager,
                                                  athena,
                                                  "cassandra",
-                                                 new KeyspacesSessionConfig(credentials,"us-west-1"));
+                                                 new KeyspacesSessionConfig(credentials, "us-west-1"));
             //handler.setNumRows(20_000);//lower number for faster unit tests vs integ tests
             this.allocator = allocator;
         }
@@ -266,6 +279,7 @@ public class CassandraRecordHandlerNyTaxiIT
                               .withIsDirectory(true)
                               .build();
     }
+
 
     private class ByteHolder
     {

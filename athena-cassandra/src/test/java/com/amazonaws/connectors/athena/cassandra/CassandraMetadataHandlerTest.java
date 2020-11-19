@@ -30,6 +30,7 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraAuthProvider;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionConfig;
 import com.amazonaws.connectors.athena.cassandra.connection.DefaultCassandraSessionFactory;
+import com.amazonaws.connectors.athena.cassandra.connection.KeyspacesSessionFactory;
 import com.amazonaws.services.athena.AmazonAthena;
 import com.amazonaws.services.secretsmanager.AWSSecretsManager;
 import com.amazonaws.services.secretsmanager.model.GetSecretValueRequest;
@@ -37,6 +38,7 @@ import com.amazonaws.services.secretsmanager.model.GetSecretValueResult;
 import com.datastax.oss.driver.api.core.CqlSession;
 
 import com.datastax.oss.driver.api.core.auth.AuthProvider;
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -60,20 +62,26 @@ public class  CassandraMetadataHandlerTest {
 
     private CassandraSessionConfig cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();
     private CassandraMetadataHandler cassandraMetadataHandler;
-    private DefaultCassandraSessionFactory cassandraSessionFactory;
+    private KeyspacesSessionFactory cassandraSessionFactory;
     private CqlSession cqlSession;
     private FederatedIdentity federatedIdentity;
     private AWSSecretsManager secretsManager;
     private AmazonAthena athena;
     private BlockAllocator blockAllocator;
 
+    public static void main(String[] args){
+        CassandraMetadataHandlerTest test = new CassandraMetadataHandlerTest();
+        test.setup();
+        test.doGetSchemaFromKeyspaces();
+    }
+
     @Before
     public void setup()
     {
-        this.cassandraSessionFactory = Mockito.mock(DefaultCassandraSessionFactory.class);
+        cassandraSessionFactory = new KeyspacesSessionFactory("us-west-1");
         //this.session = Mockito.mock(CqlSession.class, Mockito.RETURNS_DEEP_STUBS);
-        this.cqlSession = CqlSession.builder().build();//.addContactPoint(InetSocketAddress.createUnresolved("127.0.0.1",9042)).build();
-        System.out.printf("Connected session: %s%n", cqlSession.getName());
+        //this.cqlSession = CqlSession.builder().build();//.addContactPoint(InetSocketAddress.createUnresolved("127.0.0.1",9042)).build();
+        //System.out.printf("Connected session: %s%n", cqlSession.getName());
 
         Mockito.when(this.cassandraSessionFactory.getSession(Mockito.any(Supplier.class))).thenReturn(this.cqlSession);
         secretsManager = Mockito.mock(AWSSecretsManager.class);
@@ -154,9 +162,9 @@ public class  CassandraMetadataHandlerTest {
         String keyspace = "elections"; //"redfin";
         String tableName = "presidential_election_2016";
 
-
+        DriverConfigLoader loader = DriverConfigLoader.fromClasspath("application.conf");
         try (CqlSession cqlSession = CqlSession.builder()
-                                               //.withConfigLoader(loader)
+                                               .withConfigLoader(loader)
                                                .addContactPoints(contactPoints)
                                                .withAuthProvider(provider)
                                                .withLocalDatacenter("us-west-1")

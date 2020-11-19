@@ -1,9 +1,25 @@
+/*-
+ * #%L
+ * athena-cassandra
+ * %%
+ * Copyright (C) 2019 - 2020 Amazon Web Services
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
 package com.amazonaws.connectors.athena.cassandra.connection;
 
-import com.amazonaws.auth.AWSCredentialsProviderChain;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.auth.*;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.datastax.oss.driver.api.core.CqlSession;
@@ -22,18 +38,27 @@ import static com.amazonaws.regions.Regions.US_WEST_1;
 public class KeyspacesSessionFactory implements CassandraSessionFactory
 {
 
-    private static final String DEFAULT_REGION = "us-west-1";
+    private static final Region DEFAULT_REGION = Region.getRegion(US_WEST_1);
 
     public KeyspacesSessionFactory(String region){
-        this.region = Region.getRegion(Regions.fromName((region != null) ? region : DEFAULT_REGION));
+        this.region = (region != null) ? Region.getRegion(Regions.fromName(region)) : DEFAULT_REGION;
         authProvider = this::defaultAuthProvider;
     }
 
-    public KeyspacesSessionFactory(CassandraSessionConfig cassandraSessionConfig,
-                                   String region){
+    public KeyspacesSessionFactory(CassandraSessionConfig cassandraSessionConfig){
+        if(cassandraSessionConfig instanceof KeyspacesSessionConfig){
+            KeyspacesSessionConfig keyspacesSessionConfig = ((KeyspacesSessionConfig)cassandraSessionConfig);
+            region = ((KeyspacesSessionConfig)cassandraSessionConfig).getRegion();
+            authProvider = () -> authProvider(keyspacesSessionConfig.getCredentials());
+        }
+        else {
+            region = DEFAULT_REGION;
+            authProvider = this::defaultAuthProvider;
+        }
+
         this.cassandraSessionConfig = cassandraSessionConfig;
-        this.region = Region.getRegion(Regions.fromName((region != null) ? region : DEFAULT_REGION)); // also serves to validate region provided, if one exists
-        authProvider = this::defaultAuthProvider;
+
+
     }
 
     CassandraSessionConfig cassandraSessionConfig;
@@ -53,6 +78,7 @@ public class KeyspacesSessionFactory implements CassandraSessionFactory
     public CqlSession getSession(Supplier<AuthProvider> authProvider)
     {
         return CqlSession.builder()
+                         .withAuthProvider(authProvider.get())
                          .addContactPoints(contactPoints.apply(region))
                          .withLocalDatacenter(region.getName())
                          .build();
@@ -60,6 +86,10 @@ public class KeyspacesSessionFactory implements CassandraSessionFactory
 
     static final Function<Region, List<InetSocketAddress>> contactPoints = region ->
             Collections.singletonList(new InetSocketAddress(String.format("cassandra.%s.amazonaws.com", region.getName()), 9142));
+
+    public AuthProvider authProvider(AWSCredentials credentials){
+        return new SigV4AuthProvider(new AWSStaticCredentialsProvider(credentials), region.getName());
+    }
 
     private AuthProvider defaultAuthProvider(){
         return new SigV4AuthProvider(new DefaultAWSCredentialsProviderChain(), region.getName());

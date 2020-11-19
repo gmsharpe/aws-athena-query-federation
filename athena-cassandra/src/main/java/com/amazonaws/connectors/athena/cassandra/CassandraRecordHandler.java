@@ -32,6 +32,7 @@ import com.amazonaws.athena.connector.lambda.domain.predicate.Constraints;
 import com.amazonaws.athena.connector.lambda.handlers.RecordHandler;
 import com.amazonaws.athena.connector.lambda.records.ReadRecordsRequest;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionConfig;
+import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionFactory;
 import com.amazonaws.connectors.athena.cassandra.connection.DefaultCassandraSessionFactory;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSplitQueryBuilder;
 import com.amazonaws.services.athena.AmazonAthena;
@@ -54,6 +55,9 @@ import org.slf4j.LoggerFactory;
 import java.time.ZoneOffset;
 import java.util.Map;
 
+import static com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionConfig.*;
+import static com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionFactory.*;
+
 public class CassandraRecordHandler
         extends RecordHandler
 {
@@ -61,8 +65,7 @@ public class CassandraRecordHandler
     private static final Logger logger = LoggerFactory.getLogger(CassandraRecordHandler.class);
     private static final String sourceType = "cassandra";
 
-    //private final CqlSessionCredentialProvider cqlSessionCredentialProvider;
-    private final DefaultCassandraSessionFactory cassandraSessionFactory;
+    private final CassandraSessionFactory cassandraSessionFactory;
     private final CassandraSessionConfig cassandraSessionConfig;
 
     private final CassandraSplitQueryBuilder cassandraSplitQueryBuilder;
@@ -75,8 +78,8 @@ public class CassandraRecordHandler
         /** todo: how to input connection config?
          * Initiates a connection to the session specified by the application.conf.
          */
-        cassandraSessionFactory = DefaultCassandraSessionFactory.getDefaultSessionFactory();
-        cassandraSessionConfig = CassandraSessionConfig.getDefaultSessionConfig();
+        cassandraSessionFactory = getConnectionFactory(DEFAULT_SESSION_CONFIG);
+        cassandraSessionConfig = getDefaultSessionConfig();
         cassandraSplitQueryBuilder = new CassandraSplitQueryBuilder();
     }
 
@@ -86,12 +89,11 @@ public class CassandraRecordHandler
                                   final AWSSecretsManager secretsManager,
                                   final AmazonAthena athena,
                                   final String sourceType,
-                                  final DefaultCassandraSessionFactory cassandraSessionFactory,
                                   final CassandraSessionConfig cassandraSessionConfig)
     {
 
         super(amazonS3, secretsManager, athena, sourceType);
-        this.cassandraSessionFactory = cassandraSessionFactory;
+        cassandraSessionFactory = getConnectionFactory(cassandraSessionConfig);
         this.cassandraSessionConfig = cassandraSessionConfig;
         cassandraSplitQueryBuilder = new CassandraSplitQueryBuilder();
     }
@@ -107,8 +109,7 @@ public class CassandraRecordHandler
              secretsManager,
              athena,
              sourceType,
-             DefaultCassandraSessionFactory.getDefaultSessionFactory(),
-             CassandraSessionConfig.getDefaultSessionConfig());
+             getDefaultSessionConfig());
     }
 
     // todo do I need a ThrottlingInvoker.ExceptionFilter?

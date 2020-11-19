@@ -7,9 +7,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,6 +26,7 @@ import com.amazonaws.athena.connector.lambda.handlers.MetadataHandler;
 import com.amazonaws.athena.connector.lambda.metadata.*;
 import com.amazonaws.athena.connector.lambda.security.EncryptionKeyFactory;
 import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionConfig;
+import com.amazonaws.connectors.athena.cassandra.connection.CassandraSessionFactory;
 import com.amazonaws.connectors.athena.cassandra.connection.DefaultCassandraSessionFactory;
 import com.amazonaws.services.athena.AmazonAthena;
 import com.amazonaws.services.secretsmanager.AWSSecretsManager;
@@ -54,7 +55,7 @@ public class CassandraMetadataHandler extends MetadataHandler
     static final String PARTITION_COLUMN_NAME = "partition_name";
 
     public static final String ALL_PARTITIONS = "*";
-    private final DefaultCassandraSessionFactory cassandraSessionFactory;
+    private final CassandraSessionFactory cassandraSessionFactory;
     private final CassandraSessionConfig cassandraSessionConfig;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CassandraMetadataHandler.class);
@@ -91,7 +92,7 @@ public class CassandraMetadataHandler extends MetadataHandler
     }
 
     public CassandraMetadataHandler(CassandraSessionConfig cassandraSessionConfig,
-                                    DefaultCassandraSessionFactory cassandraSessionFactory,
+                                    CassandraSessionFactory cassandraSessionFactory,
                                     AWSSecretsManager secretsManager,
                                     AmazonAthena athena)
     {
@@ -106,10 +107,11 @@ public class CassandraMetadataHandler extends MetadataHandler
     @Override
     public ListSchemasResponse doListSchemaNames(BlockAllocator allocator, ListSchemasRequest request)
     {
-        LOGGER.info("doListSchemaNames: enter", request.getCatalogName());
+        LOGGER.info("doListSchemaNames: enter {}", request.getCatalogName());
         try (CqlSession cqlSession = cassandraSessionFactory.getSession()) {
             ResultSet resultSet = cqlSession.execute("SELECT DISTINCT keyspace_name FROM system_schema.columns;");
-            List<String> keyspaces = resultSet.all().stream().map(row -> row.getString("keyspace_name")).collect(Collectors.toList());
+            List<String> keyspaces = resultSet.all().stream().map(row -> row.getString("keyspace_name")).collect(
+                    Collectors.toList());
             return new ListSchemasResponse(request.getCatalogName(), keyspaces);
         }
     }
@@ -149,7 +151,7 @@ public class CassandraMetadataHandler extends MetadataHandler
     @Override
     public GetTableResponse doGetTable(BlockAllocator allocator, GetTableRequest request)
     {
-        LOGGER.info("doGetTable: enter", request.getTableName());
+        LOGGER.info("doGetTable: enter {}", request.getTableName());
         try (CqlSession cassandraCqlSession = cassandraSessionFactory.getSession()) {
             Schema schema = getSchema(cassandraCqlSession, request.getTableName(), null);
             GetTableResponse getTableResponse = new GetTableResponse(null, request.getTableName(), schema, null);
@@ -161,7 +163,6 @@ public class CassandraMetadataHandler extends MetadataHandler
     }
 
     /**
-     *
      * @param cqlSession
      * @param tableName
      * @param partitionSchema
@@ -199,9 +200,9 @@ public class CassandraMetadataHandler extends MetadataHandler
     }
 
     /**
-     * @param blockWriter Used to write rows (partitions) into the Apache Arrow response.
+     * @param blockWriter           Used to write rows (partitions) into the Apache Arrow response.
      * @param getTableLayoutRequest
-     * @param queryStatusChecker A QueryStatusChecker that you can use to stop doing work for a query that has already terminated
+     * @param queryStatusChecker    A QueryStatusChecker that you can use to stop doing work for a query that has already terminated
      */
     @Override
     public void getPartitions(BlockWriter blockWriter, GetTableLayoutRequest getTableLayoutRequest,

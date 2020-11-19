@@ -31,7 +31,7 @@ import java.util.function.Supplier;
 public class CassandraSessionConfig {
 
     private String catalog;
-    private final DefaultCassandraSessionFactory.Type type;
+    private final CassandraSessionFactory.Type type;
     private final String connectionString;
     private String secret;
 
@@ -59,7 +59,7 @@ public class CassandraSessionConfig {
      * @param secret AWS Secrets Manager secret name.
      */
     public CassandraSessionConfig(final String catalog,
-                                  final DefaultCassandraSessionFactory.Type type,
+                                  final CassandraSessionFactory.Type type,
                                   final String connectionString,
                                   final String secret)
     {
@@ -73,6 +73,12 @@ public class CassandraSessionConfig {
     {
         connectionString = "";  // empty string signals a 'localhost' Cassandra instance is expected
         type = CassandraSessionFactory.Type.DEFAULT;
+    }
+
+    public CassandraSessionConfig(final CassandraSessionFactory.Type type)
+    {
+        this.type = type;
+        connectionString = "";
     }
 
     /**
@@ -91,7 +97,7 @@ public class CassandraSessionConfig {
         this.connectionString = Validate.notBlank(connectionString, "connectionString must not be blank");
     }
 
-    public DefaultCassandraSessionFactory.Type getType()
+    public CassandraSessionFactory.Type getType()
     {
         return type;
     }
@@ -135,7 +141,7 @@ public class CassandraSessionConfig {
 
     public static class Builder {
         private String catalog;
-        private DefaultCassandraSessionFactory.Type type;
+        private CassandraSessionFactory.Type type;
         private String connectionString;
         private String secret;
 
