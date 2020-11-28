@@ -28,14 +28,7 @@ public interface CassandraSessionFactory
 {
 
     CqlSession getSession(Supplier<AuthProvider> authProvider);
-
-    /**
-     * connect to Cassandra on 'localhost' with no authentication on default port
-     */
-    default CqlSession getSession()
-    {
-        return CqlSession.builder().build();
-    }
+    CqlSession getSession();
 
     enum Type {
 

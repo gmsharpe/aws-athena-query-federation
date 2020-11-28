@@ -113,6 +113,10 @@ public class CassandraToArrowUtils {
         return Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.ROOT);
     }
 
+    public static ArrowType getArrowTypeForCassandraField(CassandraFieldInfo fieldInfo) {
+        return getArrowTypeForCassandraField(fieldInfo, null);
+    }
+
     public static ArrowType getArrowTypeForCassandraField(CassandraFieldInfo fieldInfo, Calendar calendar) {
         Preconditions.checkNotNull(fieldInfo, "CassandraFieldInfo object cannot be null");
         String timezone;

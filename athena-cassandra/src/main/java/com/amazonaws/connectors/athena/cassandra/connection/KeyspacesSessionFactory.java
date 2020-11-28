@@ -19,7 +19,9 @@
  */
 package com.amazonaws.connectors.athena.cassandra.connection;
 
-import com.amazonaws.auth.*;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.datastax.oss.driver.api.core.CqlSession;
@@ -28,7 +30,6 @@ import software.aws.mcs.auth.SigV4AuthProvider;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -37,8 +38,8 @@ import static com.amazonaws.regions.Regions.US_WEST_1;
 
 public class KeyspacesSessionFactory implements CassandraSessionFactory
 {
-
-    private static final Region DEFAULT_REGION = Region.getRegion(US_WEST_1);
+    static Region DEFAULT_REGION = Region.getRegion(US_WEST_1);
+    static int DEFAULT_PORT = 9142;
 
     public KeyspacesSessionFactory(String region){
         this.region = (region != null) ? Region.getRegion(Regions.fromName(region)) : DEFAULT_REGION;
@@ -69,6 +70,7 @@ public class KeyspacesSessionFactory implements CassandraSessionFactory
     public CqlSession getSession()
     {
         return CqlSession.builder()
+                         .withAuthProvider(defaultAuthProvider())
                          .addContactPoints(contactPoints.apply(region))
                          .withLocalDatacenter(region.getName())
                          .build();
@@ -85,7 +87,7 @@ public class KeyspacesSessionFactory implements CassandraSessionFactory
     }
 
     static final Function<Region, List<InetSocketAddress>> contactPoints = region ->
-            Collections.singletonList(new InetSocketAddress(String.format("cassandra.%s.amazonaws.com", region.getName()), 9142));
+            Collections.singletonList(new InetSocketAddress(String.format("cassandra.%s.amazonaws.com", region.getName()), DEFAULT_PORT));
 
     public AuthProvider authProvider(AWSCredentials credentials){
         return new SigV4AuthProvider(new AWSStaticCredentialsProvider(credentials), region.getName());

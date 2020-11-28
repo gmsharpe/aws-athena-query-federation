@@ -23,8 +23,6 @@ import com.amazonaws.athena.connector.lambda.data.*;
 import com.amazonaws.athena.connector.lambda.domain.Split;
 import com.amazonaws.athena.connector.lambda.domain.TableName;
 import com.amazonaws.athena.connector.lambda.domain.predicate.Constraints;
-import com.amazonaws.athena.connector.lambda.domain.predicate.Range;
-import com.amazonaws.athena.connector.lambda.domain.predicate.SortedRangeSet;
 import com.amazonaws.athena.connector.lambda.domain.predicate.ValueSet;
 import com.amazonaws.athena.connector.lambda.domain.spill.S3SpillLocation;
 import com.amazonaws.athena.connector.lambda.domain.spill.SpillLocation;
@@ -45,10 +43,7 @@ import com.amazonaws.services.secretsmanager.model.GetSecretValueRequest;
 import com.amazonaws.services.secretsmanager.model.GetSecretValueResult;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
-import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
-import org.apache.arrow.vector.types.Types;
-import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.After;
 import org.junit.Before;
@@ -62,7 +57,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.util.*;
-import java.util.function.Supplier;
 
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyObject;
@@ -142,7 +136,7 @@ public class CassandraRecordHandlerKeyspacesElections
                                                .withKeyspace(keyspace)
                                                .build()) {
             schemaForRead = cassandraMetadataHandler
-                    .getSchema(cqlSession, new TableName(keyspace, tableName), SchemaBuilder.newBuilder().build());
+                    .getTableSchema(cqlSession, new TableName(keyspace, tableName), SchemaBuilder.newBuilder().build());
 
             allocator = new BlockAllocatorImpl();
 
