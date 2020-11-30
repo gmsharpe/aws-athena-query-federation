@@ -111,7 +111,7 @@ public class DynamoDBMetadataHandler
         extends GlueMetadataHandler
 {
     @VisibleForTesting
-    static final int MAX_SPLITS_PER_REQUEST = 1000;
+    public static final int MAX_SPLITS_PER_REQUEST = 1000;
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBMetadataHandler.class);
     static final String DYNAMODB = "dynamodb";
     private static final String SOURCE_TYPE = "ddb";
@@ -119,7 +119,7 @@ public class DynamoDBMetadataHandler
     // metadata and instead rely solely on the connector's schema inference capabilities.
     private static final String GLUE_ENV = "disable_glue";
     // defines the value that should be present in the Glue Database URI to enable the DB for DynamoDB.
-    static final String DYNAMO_DB_FLAG = "dynamo-db-flag";
+    public static final String DYNAMO_DB_FLAG = "dynamo-db-flag";
     // used to filter out Glue tables which lack indications of being used for DDB.
     private static final TableFilter TABLE_FILTER = (Table table) -> table.getStorageDescriptor().getLocation().contains(DYNAMODB)
             || (table.getParameters() != null && DYNAMODB.equals(table.getParameters().get("classification")))
@@ -142,7 +142,7 @@ public class DynamoDBMetadataHandler
     }
 
     @VisibleForTesting
-    DynamoDBMetadataHandler(EncryptionKeyFactory keyFactory,
+    public DynamoDBMetadataHandler(EncryptionKeyFactory keyFactory,
             AWSSecretsManager secretsManager,
             AmazonAthena athena,
             String spillBucket,
