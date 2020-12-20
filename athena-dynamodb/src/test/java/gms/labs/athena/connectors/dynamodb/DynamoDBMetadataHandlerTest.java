@@ -30,12 +30,8 @@ import com.amazonaws.athena.connector.lambda.metadata.GetTableRequest;
 import com.amazonaws.athena.connector.lambda.metadata.*;
 import com.amazonaws.athena.connector.lambda.security.LocalKeyFactory;
 import com.amazonaws.athena.connectors.dynamodb.DynamoDBMetadataHandler;
-import com.amazonaws.athena.connectors.dynamodb.TestBase;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.regions.Regions;
 import com.amazonaws.services.athena.AmazonAthena;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.document.ItemUtils;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.glue.AWSGlue;
@@ -81,7 +77,7 @@ import static org.mockito.Mockito.when;
  */
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoDBMetadataHandlerTest
-        extends gms.labs.athena.connectors.dynamodb.TestBase
+        extends RemoteTestBase
 {
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBMetadataHandlerTest.class);
 
@@ -110,11 +106,6 @@ public class DynamoDBMetadataHandlerTest
 
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
         allocator = new BlockAllocatorImpl();
-
-        dbClient = AmazonDynamoDBClient.builder()
-                                       .withCredentials(new DefaultAWSCredentialsProviderChain())
-                                       .withRegion(Regions.US_WEST_1)
-                                       .build();
 
         dynamoDbMetadataHandler = new DynamoDBMetadataHandler(new LocalKeyFactory(),
                                                               secretsManager,
@@ -223,7 +214,7 @@ public class DynamoDBMetadataHandlerTest
         logger.info("doGetTable - {}", res.getSchema());
 
         assertThat(res.getTableName().getSchemaName(), equalTo(DEFAULT_SCHEMA));
-        assertThat(res.getTableName().getTableName(), equalTo(PRODUCT_CATALOG));
+        assertThat(res.getTableName().getTableName(), equalTo(TEST_TABLE_1));
         //assertThat(res.getSchema().getFields().size(), equalTo(11));
     }
 
@@ -268,7 +259,7 @@ public class DynamoDBMetadataHandlerTest
         GetTableLayoutRequest req = new GetTableLayoutRequest(TEST_IDENTITY,
                 TEST_QUERY_ID,
                 TEST_CATALOG_NAME,
-                new TableName(TEST_CATALOG_NAME, PRODUCT_CATALOG),
+                new TableName(TEST_CATALOG_NAME, TEST_TABLE_1),
                 new Constraints(constraintsMap),
                 SchemaBuilder.newBuilder().build(),
                 Collections.EMPTY_SET);
@@ -434,7 +425,7 @@ public class DynamoDBMetadataHandlerTest
         columns.add(new Column().withName("col3").withType("string"));
 
         Map<String, String> param = ImmutableMap.of(
-                SOURCE_TABLE_PROPERTY, PRODUCT_CATALOG,
+                SOURCE_TABLE_PROPERTY, TEST_TABLE_1,
                 COLUMN_NAME_MAPPING_PROPERTY, "col1=Col1 , col2=Col2 ,col3=Col3",
                 DATETIME_FORMAT_MAPPING_PROPERTY, "col1=datetime1,col3=datetime3 ");
         Table table = new Table()
@@ -449,7 +440,7 @@ public class DynamoDBMetadataHandlerTest
         GetTableResponse getTableResponse = dynamoDbMetadataHandler.doGetTable(allocator, getTableRequest);
         logger.info("validateSourceTableNamePropagation: GetTableResponse[{}]", getTableResponse);
         Map<String, String> customMetadata = getTableResponse.getSchema().getCustomMetadata();
-        assertThat(customMetadata.get(SOURCE_TABLE_PROPERTY), equalTo(PRODUCT_CATALOG));
+        assertThat(customMetadata.get(SOURCE_TABLE_PROPERTY), equalTo(TEST_TABLE_1));
         assertThat(customMetadata.get(DATETIME_FORMAT_MAPPING_PROPERTY_NORMALIZED), equalTo("Col1=datetime1,Col3=datetime3"));
 
         GetTableLayoutRequest getTableLayoutRequest = new GetTableLayoutRequest(TEST_IDENTITY,
@@ -462,7 +453,8 @@ public class DynamoDBMetadataHandlerTest
 
         GetTableLayoutResponse getTableLayoutResponse = dynamoDbMetadataHandler.doGetTableLayout(allocator, getTableLayoutRequest);
         logger.info("validateSourceTableNamePropagation: GetTableLayoutResponse[{}]", getTableLayoutResponse);
-        assertThat(getTableLayoutResponse.getPartitions().getSchema().getCustomMetadata().get(TABLE_METADATA), equalTo(PRODUCT_CATALOG));
+        assertThat(getTableLayoutResponse.getPartitions().getSchema().getCustomMetadata().get(TABLE_METADATA), equalTo(
+                TEST_TABLE_1));
     }
 
     @Test
@@ -475,7 +467,7 @@ public class DynamoDBMetadataHandlerTest
         columns.add(new Column().withName("col3").withType("string"));
 
         Map<String, String> param = ImmutableMap.of(
-                SOURCE_TABLE_PROPERTY, PRODUCT_CATALOG,
+                SOURCE_TABLE_PROPERTY, TEST_TABLE_1,
                 COLUMN_NAME_MAPPING_PROPERTY, "col1=Col1",
                 DATETIME_FORMAT_MAPPING_PROPERTY, "col1=datetime1,col3=datetime3 ");
         Table table = new Table()
@@ -490,7 +482,7 @@ public class DynamoDBMetadataHandlerTest
         GetTableResponse getTableResponse = dynamoDbMetadataHandler.doGetTable(allocator, getTableRequest);
         logger.info("validateSourceTableNamePropagation: GetTableResponse[{}]", getTableResponse);
         Map<String, String> customMetadata = getTableResponse.getSchema().getCustomMetadata();
-        assertThat(customMetadata.get(SOURCE_TABLE_PROPERTY), equalTo(PRODUCT_CATALOG));
+        assertThat(customMetadata.get(SOURCE_TABLE_PROPERTY), equalTo(TEST_TABLE_1));
         assertThat(customMetadata.get(DATETIME_FORMAT_MAPPING_PROPERTY_NORMALIZED), equalTo("Col1=datetime1,col3=datetime3"));
 
         Map<String, ValueSet> constraintsMap = new HashMap<>();

@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public class DynamoDBFieldResolver
+public class  DynamoDBFieldResolver
         implements FieldResolver
 {
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBFieldResolver.class);
