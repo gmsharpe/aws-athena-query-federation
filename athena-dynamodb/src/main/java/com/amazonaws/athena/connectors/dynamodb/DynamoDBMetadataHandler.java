@@ -141,6 +141,7 @@ public class DynamoDBMetadataHandler
         tableResolver = new DynamoDBTableResolver(invoker, ddbClient);
     }
 
+    // todo - remove 'public'.  added by gmsharpe so that I could create tests in separate package under my name
     @VisibleForTesting
     public DynamoDBMetadataHandler(EncryptionKeyFactory keyFactory,
             AWSSecretsManager secretsManager,

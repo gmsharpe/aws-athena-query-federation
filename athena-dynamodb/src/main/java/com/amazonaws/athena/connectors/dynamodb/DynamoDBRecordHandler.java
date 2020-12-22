@@ -114,8 +114,10 @@ public class DynamoDBRecordHandler
         this.ddbClient = AmazonDynamoDBClientBuilder.standard().build();
     }
 
+    // todo - remove 'public' edited to test in separate package
+
     @VisibleForTesting
-    DynamoDBRecordHandler(AmazonDynamoDB ddbClient, AmazonS3 amazonS3, AWSSecretsManager secretsManager, AmazonAthena athena, String sourceType)
+    public DynamoDBRecordHandler(AmazonDynamoDB ddbClient, AmazonS3 amazonS3, AWSSecretsManager secretsManager, AmazonAthena athena, String sourceType)
     {
         super(amazonS3, secretsManager, athena, sourceType);
         this.ddbClient = ddbClient;

@@ -200,7 +200,7 @@ public class BlockUtils
      *
      * @param vector The FieldVector into which we should write the provided value.
      * @param pos The row number that the value should be written to.
-     * @param rawValue The value to write.
+     * @param value The value to write.
      * @note This method incurs more Object overhead (heap churn) than using Arrow's native interface. Users of this Utility
      * should weigh their performance needs vs. the readability / ease of use.
      */
@@ -216,6 +216,14 @@ public class BlockUtils
              * ex) (not supported) org.joda.time.LocalDateTime which is returned on read from vectors
              * will be converted to (supported) java.time.ZonedDateTime
              */
+            try {
+                if(value.equals("-123009809890898.0980979098098908080987")){
+                    System.out.println("pause");
+                }
+            }
+            catch(RuntimeException e){
+
+            }
 
             //TODO: add all types
             switch (vector.getMinorType()) {
@@ -332,6 +340,7 @@ public class BlockUtils
                         dVector.setSafe(pos, bdVal);
                     }
                     else {
+                        // todo - gmsharpe (12/22/2020) this is where the ClassCastException takes place
                         BigDecimal scaledValue = ((BigDecimal) value).setScale(dVector.getScale(), RoundingMode.HALF_UP);
                         ((DecimalVector) vector).setSafe(pos, scaledValue);
                     }
