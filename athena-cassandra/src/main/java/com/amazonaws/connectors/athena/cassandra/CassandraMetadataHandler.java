@@ -47,6 +47,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.amazonaws.connectors.athena.cassandra.CassandraMetadataHandler.SchemaColumns.*;
+import static com.amazonaws.connectors.athena.cassandra.CassandraMetadataHandler.SchemaTables.COLUMNS;
+import static com.amazonaws.connectors.athena.cassandra.CassandraMetadataHandler.SchemaTables.TABLES;
 import static com.amazonaws.connectors.athena.cassandra.CassandraToArrowUtils.*;
 
 public class CassandraMetadataHandler extends MetadataHandler
@@ -65,29 +67,25 @@ public class CassandraMetadataHandler extends MetadataHandler
     private static final String SOURCE_TYPE = "cassandra";
 
     // todo - can we get this from DataStax ColumnDefinitions
-    enum SchemaColumns {
-        CLUSTERING_ORDER("clustering_order"),
-        TYPE("type"),
-        COLUMN_NAME("column_name"),
-        KIND("kind"),
-        POSITION("position");
+    static final class SchemaColumns {
+        public static final String CLUSTERING_ORDER = "clustering_order";
+        public static final String TYPE = "type";
+        public static final String COLUMN_NAME = "column_name";
+        public static final String KIND = "kind";
+        public static final String POSITION = "position";
+        public static final String KEYSPACE_NAME = "keyspace_name";
 
-        SchemaColumns(String columnName){
-            // this asserts the columnName is valid.  will throw IllegalArgumentException, otherwise
-            SchemaColumns.valueOf(columnName.toUpperCase());
-            this.columnName = columnName.toLowerCase();
-        }
-        String columnName;
-        @Override
-        public String toString(){
-            return columnName;
-        }
     }
 
-    static final String TYPE = "type";
-    static final String CLUSTERING_ORDER = "clustering_order";
-    static final String COLUMN_NAME = "column_name";
-    static final String KIND = "kind";
+    static final class SchemaTables {
+        public static final String TABLES = "tables";
+        public static final String COLUMNS = "columns";
+
+    }
+
+    static final String TABLE_NAME = "table_name";
+    static final String PARTITION_KEY = "partition_key";
+    static final String CLUSTERING_KEY = "clustering_key";
 
     protected CassandraMetadataHandler(final DefaultCassandraSessionFactory cassandraSessionFactory)
     {
@@ -130,10 +128,10 @@ public class CassandraMetadataHandler extends MetadataHandler
     {
         LOGGER.info("doListSchemaNames: enter {}", request.getCatalogName());
         try (CqlSession cqlSession = cassandraSessionFactory.getSession()) {
-            ResultSet resultSet = cqlSession.execute("SELECT DISTINCT keyspace_name FROM system_schema.columns;");
+            ResultSet resultSet = cqlSession.execute(String.format("SELECT DISTINCT %s FROM system_schema.columns;", KEYSPACE_NAME));
             List<String> keyspaces = resultSet.all()
                                               .stream()
-                                              .map(row -> row.getString("keyspace_name"))
+                                              .map(row -> row.getString(KEYSPACE_NAME))
                                               .collect(Collectors.toList());
             return new ListSchemasResponse(request.getCatalogName(), keyspaces);
         }
@@ -161,12 +159,12 @@ public class CassandraMetadataHandler extends MetadataHandler
 
     private Collection<TableName> listTables(CqlSession cqlSession, String schemaName)
     {
-        ResultSet resultSet = cqlSession.execute("SELECT * FROM system_schema.tables");
+        ResultSet resultSet = cqlSession.execute(String.format("SELECT * FROM system_schema.%s", TABLES));
 
         return Collections.unmodifiableCollection(
                 resultSet.all()
                          .stream()
-                         .map(row -> new TableName(row.getString("keyspace_name"), row.getString("table_name")))
+                         .map(row -> new TableName(row.getString(KEYSPACE_NAME), row.getString(TABLE_NAME)))
                          .collect(Collectors.toList()));
     }
 
@@ -193,18 +191,20 @@ public class CassandraMetadataHandler extends MetadataHandler
     Schema getTableSchema(CqlSession cqlSession, TableName tableName, Schema partitionSchema)
     {
         SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder();
-        String schemaQuery = "SELECT * FROM system_schema.columns WHERE keyspace_name = :keyspace_name and table_name = :table_name;";
+        String schemaQuery = String.format("SELECT * FROM system_schema.%s WHERE %s = :keyspace_name and %s = :table_name;",
+                                           COLUMNS,
+                                           KEYSPACE_NAME,
+                                           TABLE_NAME);
+
         SimpleStatement statement = new SimpleStatementBuilder(schemaQuery).build();
 
         PreparedStatement preparedStatement = cqlSession.prepare(statement);
-        BoundStatement bndStmt = preparedStatement.bind().setString("keyspace_name", tableName.getSchemaName())
-                                                  .setString("table_name", tableName.getTableName());
-        ResultSet resultSet = cqlSession.execute(bndStmt);
 
-        /* ResultSet resultSet = cqlSession.execute(statement);
-           String.format("SELECT * FROM system_schema.columns WHERE keyspace_name = '%s' and table_name = '%s';",
-                              tableName.getSchemaName(),
-                              tableName.getTableName()));*/
+        BoundStatement bndStmt = preparedStatement.bind()
+                                                  .setString(KEYSPACE_NAME, tableName.getSchemaName())
+                                                  .setString(TABLE_NAME, tableName.getTableName());
+
+        ResultSet resultSet = cqlSession.execute(bndStmt);
 
         resultSet.all().forEach(row -> {
             String cassandraType = row.getString(TYPE);
@@ -226,20 +226,6 @@ public class CassandraMetadataHandler extends MetadataHandler
         return schemaBuilder.build();
     }
 
-    /*
-                String clusteringOrder = row.getString(CLUSTERING_ORDER.toString());
-            String kind = row.getString(KIND.toString());
-            int position = row.getInt(POSITION.toString());
-
-
-              .addField(FieldBuilder.newBuilder(clusteringOrder,
-                                                                             getArrowTypeForCassandraField(new CassandraFieldInfo(DataTypes.TEXT))).build())
-                                           .addField(FieldBuilder.newBuilder(kind,
-                                                                             getArrowTypeForCassandraField(new CassandraFieldInfo(DataTypes.TEXT))).build())
-                                           .addField(FieldBuilder.newBuilder(position,
-                                                                             getArrowTypeForCassandraField(new CassandraFieldInfo(DataTypes.INT))).build())
-     */
-
     /**
      * @param blockWriter           Used to write rows (partitions) into the Apache Arrow response.
      * @param getTableLayoutRequest
@@ -249,19 +235,30 @@ public class CassandraMetadataHandler extends MetadataHandler
     public void getPartitions(BlockWriter blockWriter, GetTableLayoutRequest getTableLayoutRequest,
                               QueryStatusChecker queryStatusChecker)
     {
+        TableName tableName = getTableLayoutRequest.getTableName();
 
         LOGGER.info("{}: Schema {}, table {}", getTableLayoutRequest.getQueryId(),
-                    getTableLayoutRequest.getTableName().getSchemaName(),
-                    getTableLayoutRequest.getTableName().getTableName());
+                    tableName.getSchemaName(),
+                    tableName.getTableName());
 
         try (CqlSession cqlSession = cassandraSessionFactory.getSession()) {
+
+            String tableSchemaSql =
+                    String.format("SELECT * FROM system_schema.%s WHERE %s = :keyspace_name and %s = :table_name and %s = :kind;",
+                                  COLUMNS,
+                                  KEYSPACE_NAME,
+                                  TABLE_NAME,
+                                  KIND);
+
+            SimpleStatement statement = new SimpleStatementBuilder(tableSchemaSql).build();
+
+            PreparedStatement preparedStatement = cqlSession.prepare(statement);
+
             // get partition_keys
-            ResultSet resultSet = cqlSession.execute("SELECT * FROM system_schema.columns WHERE keyspace_name = '"
-                                                             + getTableLayoutRequest.getTableName().getSchemaName()
-                                                             + "' and table_name = '"
-                                                             + getTableLayoutRequest.getTableName().getTableName() + "'" +
-                                                             "' and kind = 'partition_key'" +
-                                                             ";");
+            ResultSet resultSet = cqlSession.execute(preparedStatement.bind()
+                                                                      .setString(KEYSPACE_NAME, tableName.getSchemaName())
+                                                                      .setString(TABLE_NAME, tableName.getTableName())
+                                                                      .setString(KIND, PARTITION_KEY));
 
             Iterator<Row> rows = resultSet.iterator();
 
@@ -289,14 +286,11 @@ public class CassandraMetadataHandler extends MetadataHandler
                 while (rows.hasNext() && queryStatusChecker.isQueryRunning());
             }
 
-            // get clustering_keys?
-            ResultSet clusteringKeysResultSet = cqlSession.execute(
-                    "SELECT * FROM system_schema.columns WHERE keyspace_name = '"
-                            + getTableLayoutRequest.getTableName().getSchemaName()
-                            + "' and table_name = '"
-                            + getTableLayoutRequest.getTableName().getTableName() + "'" +
-                            "' and kind = 'clustering_key'" +
-                            ";");
+            // get clustering_keys
+            ResultSet clusteringKeysResultSet = cqlSession.execute(preparedStatement.bind()
+                                                                                    .setString(KEYSPACE_NAME, tableName.getSchemaName())
+                                                                                    .setString(TABLE_NAME, tableName.getTableName())
+                                                                                    .setString(KIND, CLUSTERING_KEY));
 
             Iterator<Row> clusteringKeys = clusteringKeysResultSet.iterator();
 
@@ -324,10 +318,8 @@ public class CassandraMetadataHandler extends MetadataHandler
     public Schema getPartitionSchema(final String catalogName)
     {
         SchemaBuilder schemaBuilder = SchemaBuilder.newBuilder()
-                                                   .addField(BLOCK_PARTITION_SCHEMA_COLUMN_NAME,
-                                                             Types.MinorType.VARCHAR.getType())
-                                                   .addField(BLOCK_PARTITION_COLUMN_NAME,
-                                                             Types.MinorType.VARCHAR.getType());
+                                                   .addField(BLOCK_PARTITION_SCHEMA_COLUMN_NAME, Types.MinorType.VARCHAR.getType())
+                                                   .addField(BLOCK_PARTITION_COLUMN_NAME, Types.MinorType.VARCHAR.getType());
         return schemaBuilder.build();
     }
 }
