@@ -12,7 +12,7 @@
         <cassandra.driver.version>4.7.2</cassandra.driver.version>
         <slf4jVersion>1.7.30</slf4jVersion>
         <log4j2Version>2.13.3</log4j2Version>
-        <aws-athena-federation-sdk.version>2020.35.1</aws-athena-federation-sdk.version>
+        <aws-athena-federation-sdk.version>2020.46.1</aws-athena-federation-sdk.version>
         <cdk.version>1.70.0</cdk.version>
     </properties>
 
@@ -109,7 +109,7 @@
             <version>${log4j2Version}</version>
             <scope>runtime</scope>
         </dependency>
-        <dependency>
+<!--        <dependency>
             <groupId>software.amazon.awscdk</groupId>
             <artifactId>core</artifactId>
             <version>[1.19.0, 2)</version>
@@ -118,9 +118,70 @@
             <groupId>software.amazon.awscdk</groupId>
             <artifactId>cassandra</artifactId>
             <version>[1.19.0, 2)</version>
-        </dependency>
+        </dependency>-->
 
     </dependencies>
-
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>2.10</version>
+                <executions>
+                    <execution>
+                        <id>copy</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <includeScope>test</includeScope>
+                            <includeTypes>so,dll,dylib</includeTypes>
+                            <outputDirectory>${project.basedir}/native-libs</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.2.1</version>
+                <configuration>
+                    <createDependencyReducedPom>false</createDependencyReducedPom>
+                    <filters>
+                        <filter>
+                            <artifact>*:*</artifact>
+                            <excludes>
+                                <exclude>META-INF/*.SF</exclude>
+                                <exclude>META-INF/*.DSA</exclude>
+                                <exclude>META-INF/*.RSA</exclude>
+                            </excludes>
+                        </filter>
+                    </filters>
+                    <transformers>
+                        <!-- This transformer is here to concatenate log4j2 cache during shading -->
+                        <transformer
+                                implementation="com.github.edwgiz.mavenShadePlugin.log4j2CacheTransformer.PluginsCacheFileTransformer">
+                        </transformer>
+                    </transformers>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.github.edwgiz</groupId>
+                        <artifactId>maven-shade-plugin.log4j2-cachefile-transformer</artifactId>
+                        <version>2.8.1</version>
+                    </dependency>
+                </dependencies>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

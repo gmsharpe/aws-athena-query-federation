@@ -44,7 +44,7 @@
     </scm>
 
     <modules>
-        <module>athena-cloudwatch</module>
+<!--        <module>athena-cloudwatch</module>
         <module>athena-docdb</module>
         <module>athena-redis</module>
         <module>athena-aws-cmdb</module>
@@ -52,15 +52,15 @@
         <module>athena-hbase</module>
         <module>athena-cloudwatch-metrics</module>
         <module>athena-example</module>
-        <module>athena-elasticsearch</module>
+        <module>athena-elasticsearch</module>-->
         <module>athena-federation-sdk</module>
-        <module>athena-tpcds</module>
-        <module>athena-jdbc</module>
+<!--        <module>athena-tpcds</module>
+        <module>athena-jdbc</module>-->
         <module>athena-federation-sdk-tools</module>
-        <module>athena-udfs</module>
+       <!-- <module>athena-udfs</module>-->
         <module>athena-cassandra</module>
-        <module>athena-timestream</module>
-        <module>athena-neptune</module>
+<!--        <module>athena-timestream</module>
+        <module>athena-neptune</module>-->
 
     </modules>
 

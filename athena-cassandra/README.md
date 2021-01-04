@@ -26,3 +26,22 @@ The Athena AWS Cassandra Connector provides several configuration options via La
 
 * https://docs.datastax.com/en/developer/java-driver/4.8/manual/query_builder/
 * https://docs.datastax.com/en/developer/java-driver/4.8/
+
+
+### Docker Build
+
+``` 
+docker volume create --name maven-repo-${java_version_number}
+docker run -it -v maven-repo:/root/.m2 maven mvn archetype:generate # will download artifacts
+docker run -it -v maven-repo:/root/.m2 maven mvn archetype:generate # will reuse downloaded artifacts
+```
+
+https://avdi.codes/aws-sam-in-a-docker-dev-container/
+
+```
+# from ATHENA_CONNECTOR_HOME
+docker build -t cassandra-cdk-build:0.0.1 \
+    --file athena-cassandra/docker/Dockerfile.build .
+
+docker run -it --env AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY -v F:\\git-gms\\aws-athena-query-federation\\athena-cassandra\\cdk_deploy:/cdk_deploy cassandra-cdk-build:0.0.1
+```

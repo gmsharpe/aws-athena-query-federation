@@ -1,0 +1,33 @@
+FROM cdk:1.0.0
+
+RUN echo "building aws-athena-query-federation"
+
+# build athena-query-federation & athena-cassandra
+
+RUN mkdir aws-athena-query-federation
+
+COPY athena-federation-sdk aws-athena-query-federation/athena-federation-sdk
+COPY athena-federation-sdk-tools aws-athena-query-federation/athena-federation-sdk-tools
+COPY pom.xml aws-athena-query-federation/pom.xml
+
+RUN mkdir aws-athena-query-federation/athena-cassandra
+COPY athena-cassandra/pom.xml aws-athena-query-federation/athena-cassandra/pom.xml
+
+# exclude athena-cassandra from initial mvn install
+RUN cd aws-athena-query-federation && mvn -DskipTests=true -pl "!athena-cassandra" -s /usr/share/maven/ref/settings-docker.xml install
+
+# cache dependencies (see https://hub.docker.com/_/maven)
+RUN mkdir -p poms_used_for_caching/athena-cassandra poms_used_for_caching/cdk-deploy
+COPY athena-cassandra/pom.xml poms_used_for_caching/athena-cassandra/pom.xml
+COPY athena-cassandra/cdk_deploy/pom.xml poms_used_for_caching/cdk-deploy/pom.xml
+RUN cd poms_used_for_caching/athena-cassandra && mvn -s /usr/share/maven/ref/settings-docker.xml dependency:resolve
+RUN cd poms_used_for_caching/cdk-deploy && mvn -s /usr/share/maven/ref/settings-docker.xml dependency:resolve
+
+COPY athena-cassandra aws-athena-query-federation/athena-cassandra
+RUN cd aws-athena-query-federation/athena-cassandra && mvn -DskipTests=true -s /usr/share/maven/ref/settings-docker.xml install
+
+ENV AWS_DEFAULT_REGION=us-west-1
+
+# RUN chmod +x aws-athena-query-federation/athena-cassandra/cdk_deploy/synth_and_deploy.sh
+
+CMD ["/bin/bash"]

@@ -24,13 +24,12 @@
                     <target>1.8</target>
                 </configuration>
             </plugin>
-
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.0.0</version>
                 <configuration>
-                    <mainClass>com.myorg.CdkDeployApp</mainClass>
+                    <mainClass>com.amazonaws.cdkstack.myorg.CdkDeployApp</mainClass>
                 </configuration>
             </plugin>
         </plugins>
@@ -53,7 +52,11 @@
             <artifactId>sam</artifactId>
             <version>${cdk.version}</version>
         </dependency>
-
+        <dependency>
+            <groupId>software.amazon.awscdk</groupId>
+            <artifactId>iam</artifactId>
+            <version>${cdk.version}</version>
+        </dependency>
 
         <dependency>
           <groupId>org.junit.jupiter</groupId>

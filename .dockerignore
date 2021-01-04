@@ -1,0 +1,15 @@
+/athena-cmdb
+/athena-cloudwatch
+/athena-cloudwatch-metrics
+/athena-docdb
+/athena-dynamodb
+/athena-elasticsearch
+/athena-example
+/athena-example-gms
+/athena-hbase
+/athena-jdbc
+/athena-neptune
+/athena-redis
+/athena-timestream
+/athena-tpcds
+/athena-udfs
